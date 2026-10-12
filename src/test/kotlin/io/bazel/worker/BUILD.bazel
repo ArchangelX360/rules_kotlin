@@ -24,10 +24,24 @@ kt_jvm_test(
     ],
 )
 
+kt_jvm_test(
+    name = "PersistentWorkerTest",
+    srcs = [
+        "PersistentWorkerTest.kt",
+    ],
+    test_class = "io.bazel.worker.PersistentWorkerTest",
+    deps = [
+        "//src/main/kotlin/io/bazel/worker",
+        "@bazel_worker_java//:worker_protocol_java_proto",
+        "@kotlin_rules_maven_test//:com_google_truth_truth",
+    ],
+)
+
 test_suite(
     name = "worker_tests",
     tests = [
         ":InvocationWorkerTest",
+        ":PersistentWorkerTest",
         ":WorkerContextTest",
     ],
 )
