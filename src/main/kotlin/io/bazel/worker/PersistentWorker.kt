@@ -21,6 +21,8 @@ import com.google.devtools.build.lib.worker.ProtoWorkerMessageProcessor
 import com.google.devtools.build.lib.worker.WorkRequestHandler
 import com.google.devtools.build.lib.worker.WorkerProtocol
 import java.io.IOException
+import java.io.InputStream
+import java.io.PrintStream
 import java.io.PrintWriter
 import java.nio.file.Paths
 import java.time.Duration
@@ -29,9 +31,12 @@ import java.time.Duration
  * PersistentWorker satisfies Bazel persistent worker protocol for executing work.
  *
  * Supports multiplex (https://docs.bazel.build/versions/master/multiplex-worker.html) provided
- * the work is thread/coroutine safe.
+ * the work is thread/coroutine safe, and cancellation provided the work stops on interruption.
  */
-class PersistentWorker : Worker {
+class PersistentWorker(
+  private val input: InputStream = System.`in`,
+  private val output: PrintStream = System.out,
+) : Worker {
   override fun start(execute: Work): Int {
     return WorkerContext.run {
       val realStdErr = System.err
@@ -51,8 +56,11 @@ class PersistentWorker : Worker {
                 ).asResponse(pw)
               },
               realStdErr,
-              ProtoWorkerMessageProcessor(System.`in`, System.out),
+              ProtoWorkerMessageProcessor(input, output),
             ).setCpuUsageBeforeGc(Duration.ofSeconds(10))
+            // Bazel sends cancel requests only to actions with `supports-worker-cancellation`.
+            // The interrupt ends the task as an error, and the handler then reports it as cancelled.
+            .setCancelCallback { _, thread -> thread.interrupt() }
             .build()
         workerHandler.processRequests()
       } catch (e: IOException) {
