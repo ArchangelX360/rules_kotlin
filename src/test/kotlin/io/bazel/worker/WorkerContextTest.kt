@@ -68,6 +68,31 @@ class WorkerContextTest {
   }
 
   @Test
+  fun execRootIsTheSandboxDirWhenProvided() {
+    val sandboxDir = tmp.newFolder("sandbox").toPath()
+    var observedRoot: java.nio.file.Path? = null
+    WorkerContext.run {
+      doTask("sandboxed", sandboxDir = sandboxDir) { ctx ->
+        observedRoot = ctx.execRoot
+        SUCCESS
+      }
+    }
+    assertThat(observedRoot).isEqualTo(sandboxDir)
+  }
+
+  @Test
+  fun execRootIsTheWorkingDirectoryWhenSandboxDirAbsent() {
+    var observedRoot: java.nio.file.Path? = null
+    WorkerContext.run {
+      doTask("unsandboxed") { ctx ->
+        observedRoot = ctx.execRoot
+        SUCCESS
+      }
+    }
+    assertThat(observedRoot).isEqualTo(java.nio.file.Paths.get("").toAbsolutePath())
+  }
+
+  @Test
   fun logging() {
     var outerLog: List<String> = emptyList()
     val result = WorkerContext.run(

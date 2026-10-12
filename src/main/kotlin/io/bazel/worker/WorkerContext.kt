@@ -26,6 +26,7 @@ import java.io.Closeable
 import java.io.InterruptedIOException
 import java.io.PrintStream
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.logging.Level
 import java.util.logging.Logger
 import java.util.logging.SimpleFormatter
@@ -112,6 +113,12 @@ class WorkerContext private constructor(
      * path. Empty outside the persistent worker protocol.
      */
     val inputDigests: Map<String, String> = emptyMap(),
+    /**
+     * The root that the request paths are relative to: the sandbox directory of a sandboxed
+     * request, otherwise the worker working directory. [directory] is a scratch directory instead
+     * when the request has no sandbox.
+     */
+    val execRoot: Path = directory,
   ) : ScopeLogging by logging {
     /** resultOf a status supplier that includes information collected in the Context. */
     fun resultOf(executeTaskIn: (TaskContext) -> Status): TaskResult {
@@ -151,7 +158,12 @@ class WorkerContext private constructor(
     } else {
       WorkingDirectoryContext
         .use {
-          TaskContext(dir, logging = narrowTo(name), inputDigests = inputDigests).resultOf(task)
+          TaskContext(
+            dir,
+            logging = narrowTo(name),
+            inputDigests = inputDigests,
+            execRoot = Paths.get("").toAbsolutePath(),
+          ).resultOf(task)
         }
     }.also {
       info { "end task $name: ${it.status}" }
