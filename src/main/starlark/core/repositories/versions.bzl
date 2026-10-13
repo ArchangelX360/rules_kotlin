@@ -120,6 +120,22 @@ versions = struct(
         script_runtime_sha256 = "a658cf5902a1525a06c264a5e42b437e97a6679ddeef8ca641246f270cf6a013",
         tooling_core_sha256 = "5fc5db083803232857408ed5c25bcc307c703b04bdef6cb2c34ebf4db611a622",
     ),
+    # Binaryen, for wasm-opt. The Kotlin Gradle plugin of the compiler release uses this version.
+    BINARYEN = struct(
+        version = "125",
+        url_template = "https://github.com/WebAssembly/binaryen/releases/download/version_{version}/binaryen-version_{version}-{platform}.tar.gz",
+        strip_prefix_template = "binaryen-version_{version}",
+        # platform -> (sha256, wasm-opt executable, the libraries it loads). The macOS wasm-opt
+        # loads libbinaryen.dylib from @loader_path/../lib.
+        archives = {
+            "aarch64-linux": ("d0382de3c189a7cbb9fdda93e2966f4557f6a00f201e2c4937c27ca01cead4fc", "bin/wasm-opt", []),
+            "arm64-macos": ("28bab047c4ce845c5c1da111222ffee5fafcec0bbedd046ad8b3dcae0fd57076", "bin/wasm-opt", ["lib/libbinaryen.dylib"]),
+            "arm64-windows": ("eebde647c9f24bcd3b8988891ef3f3ab404877aa1317c868a7c39824ccacca0d", "bin/wasm-opt.exe", []),
+            "x86_64-linux": ("7c3bc16599c8274a04d34a504fe4be2047884f900e0e2da2f6fb9cd667183be4", "bin/wasm-opt", []),
+            "x86_64-macos": ("72a98df1bfb81dd1e241d2b022e15c72edbd49e29d84abc6a1129c7d083072dd", "bin/wasm-opt", ["lib/libbinaryen.dylib"]),
+            "x86_64-windows": ("7d20f9f22ee1d1a195aecccb21390f8c599b5025219520c7c9f04673b39d2c20", "bin/wasm-opt.exe", []),
+        },
+    ),
     RULES_ANDROID = version(
         version = "0.7.3",
         url_templates = [
