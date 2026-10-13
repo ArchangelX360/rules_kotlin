@@ -87,3 +87,56 @@ kt_bootstrap_binary(
     visibility = ["//src:__subpackages__"],
     runtime_deps = [":ksp2_lib"],
 )
+
+kt_bootstrap_library(
+    name = "wasmjs_build_lib",
+    srcs = ["WasmJsBuild.kt"],
+    visibility = ["//src:__subpackages__"],
+    deps = [
+        "//src/main/kotlin/io/bazel/kotlin/builder/tasks/wasmjs",
+        "//src/main/kotlin/io/bazel/kotlin/builder/toolchain",
+        "//src/main/kotlin/io/bazel/worker",
+    ],
+)
+
+kt_bootstrap_binary(
+    name = "wasmjs_build",
+    data = [
+        "//kotlin/compiler:kotlin-compiler",
+        "//src/main/kotlin/io/bazel/kotlin/compiler:compiler.jar",
+        "@com_github_jetbrains_kotlin//:home",
+    ] + _KOTLIN_STDLIBS,
+    final_runtime_deps = _KOTLIN_STDLIBS,
+    jvm_flags = [
+        "-D@com_github_jetbrains_kotlin...kotlin-compiler=$(rlocationpath //kotlin/compiler:kotlin-compiler)",
+        "-D@rules_kotlin...compiler=$(rlocationpath //src/main/kotlin/io/bazel/kotlin/compiler:compiler.jar)",
+        "-XX:-MaxFDLimit",
+    ],
+    main_class = "io.bazel.kotlin.builder.cmd.WasmJsBuild",
+    shade_rules = "//src/main/kotlin:shade.jarjar",
+    visibility = ["//src:__subpackages__"],
+    runtime_deps = [":wasmjs_build_lib"],
+)
+
+kt_bootstrap_library(
+    name = "wasm_opt_lib",
+    srcs = ["WasmOptMain.kt"],
+    visibility = ["//src:__subpackages__"],
+    deps = [
+        "//src/main/kotlin/io/bazel/kotlin/builder/tasks/wasmjs",
+        "//src/main/kotlin/io/bazel/worker",
+    ],
+)
+
+kt_bootstrap_binary(
+    name = "wasm_opt",
+    data = _KOTLIN_STDLIBS,
+    final_runtime_deps = _KOTLIN_STDLIBS,
+    jvm_flags = [
+        "-XX:-MaxFDLimit",
+    ],
+    main_class = "io.bazel.kotlin.builder.cmd.WasmOptMain",
+    shade_rules = "//src/main/kotlin:shade.jarjar",
+    visibility = ["//src:__subpackages__"],
+    runtime_deps = [":wasm_opt_lib"],
+)

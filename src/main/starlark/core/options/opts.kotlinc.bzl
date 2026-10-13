@@ -667,6 +667,36 @@ Migration to jvm_default:
         value_to_flag = None,
         map_value_to_flag = _map_warning_level,
     ),
+    "x_wasm_attach_js_exception": struct(
+        args = dict(
+            default = False,
+            doc = "Attach a thrown JavaScript exception to the Kotlin exception that wraps it. Kotlin/WasmJs only.",
+        ),
+        type = attr.bool,
+        value_to_flag = {
+            True: ["-Xwasm-attach-js-exception"],
+        },
+    ),
+    "x_wasm_generate_closed_world_multimodule": struct(
+        args = dict(
+            default = False,
+            doc = "Link a closed-world application into one Wasm module per klib. Kotlin/WasmJs only.",
+        ),
+        type = attr.bool,
+        value_to_flag = {
+            True: ["-Xwasm-generate-closed-world-multimodule"],
+        },
+    ),
+    "x_wasm_kclass_fqn": struct(
+        args = dict(
+            default = False,
+            doc = "Support KClass::qualifiedName. Kotlin/WasmJs only.",
+        ),
+        type = attr.bool,
+        value_to_flag = {
+            True: ["-Xwasm-kclass-fqn"],
+        },
+    ),
     "x_when_guards": struct(
         flag = "-Xwhen-guards",
         args = dict(
@@ -732,6 +762,42 @@ kt_kotlinc_options = rule(
     attrs = {n: o.type(**o.args) for n, o in _KOPTS.items()},
 )
 
+# Options that only the Kotlin/WasmJs compiler accepts.
+_WASMJS_ONLY_OPTIONS = [
+    "x_wasm_attach_js_exception",
+    "x_wasm_generate_closed_world_multimodule",
+    "x_wasm_kclass_fqn",
+]
+
+# Options that only the Kotlin/JVM compiler accepts.
+_JVM_ONLY_OPTIONS = [
+    "include_stdlibs",
+    "java_parameters",
+    "jvm_default",
+    "jvm_target",
+    "x_assertions",
+    "x_backend_threads",
+    "x_emit_jvm_type_annotations",
+    "x_jdk_release",
+    "x_jspecify_annotations",
+    "x_jsr_305",
+    "x_jvm_default",
+    "x_lambdas",
+    "x_no_call_assertions",
+    "x_no_optimize",
+    "x_no_optimized_callable_references",
+    "x_no_param_assertions",
+    "x_no_receiver_assertions",
+    "x_no_source_debug_extension",
+    "x_nullability_annotations",
+    "x_sam_conversions",
+    "x_type_enhancement_improvements_strict_mode",
+]
+
+_JVM_KOPTS = {n: o for n, o in _KOPTS.items() if n not in _WASMJS_ONLY_OPTIONS}
+
+_WASMJS_KOPTS = {n: o for n, o in _KOPTS.items() if n not in _JVM_ONLY_OPTIONS}
+
 def kotlinc_options_to_flags(kotlinc_options):
     """Translate KotlincOptions to worker flags
 
@@ -740,4 +806,16 @@ def kotlinc_options_to_flags(kotlinc_options):
     Returns:
         list of flags to add to the command line.
     """
-    return convert.javac_options_to_flags(_KOPTS, kotlinc_options)
+    return convert.javac_options_to_flags(_JVM_KOPTS, kotlinc_options)
+
+def kotlinc_options_to_wasmjs_flags(kotlinc_options):
+    """Translate KotlincOptions to Kotlin/WasmJs compiler flags.
+
+    The options that only the Kotlin/JVM compiler accepts are left out.
+
+    Args:
+        kotlinc_options maybe containing KotlincOptions
+    Returns:
+        list of flags to add to the command line.
+    """
+    return convert.kotlinc_options_to_flags(_WASMJS_KOPTS, kotlinc_options)

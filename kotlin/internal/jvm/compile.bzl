@@ -1339,7 +1339,10 @@ def _export_only_providers(ctx, actions, attr, outputs):
     )
 
 compile = struct(
+    collect_plugins_for_export = _collect_plugins_for_export,
     compiler_toolchains = _compiler_toolchains,
+    exported_plugins = _exported_plugins,
+    new_plugins_from = _new_plugins_from,
     verify_associates_not_duplicated_in_deps = _fail_if_invalid_associate_deps,
     export_only_providers = _export_only_providers,
     kt_jvm_produce_output_jar_actions = _kt_jvm_produce_output_jar_actions,

@@ -17,6 +17,7 @@ load("//src/main/starlark/release:packager.bzl", "release_archive")
 release_archive(
     name = "pkg",
     srcs = [
+        "BUILD.binaryen.bazel",
         "BUILD.com_github_google_ksp.bazel",
         "BUILD.com_github_jetbrains_kotlin.bazel",
         "BUILD.kotlin_capabilities.bazel",

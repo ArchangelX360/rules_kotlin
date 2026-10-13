@@ -118,3 +118,41 @@ java_binary(
     visibility = ["//visibility:public"],
     runtime_deps = [":ksp2_worker"],
 )
+
+java_import(
+    name = "wasmjs_worker",
+    jars = ["wasmjs_worker.jar"],
+)
+
+java_binary(
+    name = "wasmjs_build",
+    data = [
+        "//kotlin/compiler:kotlin-compiler",
+        "//src/main/kotlin/io/bazel/kotlin/compiler",
+        "@com_github_jetbrains_kotlin//:home",
+    ] + KOTLIN_STDLIBS,
+    jvm_flags = [
+        "-D@com_github_jetbrains_kotlin...kotlin-compiler=$(rlocationpath //kotlin/compiler:kotlin-compiler)",
+        "-D@rules_kotlin...compiler=$(rlocationpath //src/main/kotlin/io/bazel/kotlin/compiler)",
+        "-XX:-MaxFDLimit",
+    ],
+    main_class = "io.bazel.kotlin.builder.cmd.WasmJsBuild",
+    visibility = ["//visibility:public"],
+    runtime_deps = [":wasmjs_worker"] + KOTLIN_STDLIBS,
+)
+
+java_import(
+    name = "wasm_opt_worker",
+    jars = ["wasm_opt_worker.jar"],
+)
+
+java_binary(
+    name = "wasm_opt",
+    data = KOTLIN_STDLIBS,
+    jvm_flags = [
+        "-XX:-MaxFDLimit",
+    ],
+    main_class = "io.bazel.kotlin.builder.cmd.WasmOptMain",
+    visibility = ["//visibility:public"],
+    runtime_deps = [":wasm_opt_worker"] + KOTLIN_STDLIBS,
+)

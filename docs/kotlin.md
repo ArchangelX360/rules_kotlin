@@ -439,7 +439,9 @@ kt_kotlinc_options(<a href="#kt_kotlinc_options-name">name</a>, <a href="#kt_kot
                    <a href="#kt_kotlinc_options-x_report_all_warnings">x_report_all_warnings</a>, <a href="#kt_kotlinc_options-x_report_perf">x_report_perf</a>, <a href="#kt_kotlinc_options-x_sam_conversions">x_sam_conversions</a>, <a href="#kt_kotlinc_options-x_skip_prerelease_check">x_skip_prerelease_check</a>,
                    <a href="#kt_kotlinc_options-x_suppress_version_warnings">x_suppress_version_warnings</a>, <a href="#kt_kotlinc_options-x_suppress_warning">x_suppress_warning</a>,
                    <a href="#kt_kotlinc_options-x_type_enhancement_improvements_strict_mode">x_type_enhancement_improvements_strict_mode</a>, <a href="#kt_kotlinc_options-x_use_fir_lt">x_use_fir_lt</a>, <a href="#kt_kotlinc_options-x_use_k2">x_use_k2</a>,
-                   <a href="#kt_kotlinc_options-x_warning_level">x_warning_level</a>, <a href="#kt_kotlinc_options-x_when_guards">x_when_guards</a>, <a href="#kt_kotlinc_options-x_xlanguage">x_xlanguage</a>)
+                   <a href="#kt_kotlinc_options-x_warning_level">x_warning_level</a>, <a href="#kt_kotlinc_options-x_wasm_attach_js_exception">x_wasm_attach_js_exception</a>,
+                   <a href="#kt_kotlinc_options-x_wasm_generate_closed_world_multimodule">x_wasm_generate_closed_world_multimodule</a>, <a href="#kt_kotlinc_options-x_wasm_kclass_fqn">x_wasm_kclass_fqn</a>, <a href="#kt_kotlinc_options-x_when_guards">x_when_guards</a>,
+                   <a href="#kt_kotlinc_options-x_xlanguage">x_xlanguage</a>)
 </pre>
 
 Define kotlin compiler options.
@@ -495,6 +497,9 @@ Define kotlin compiler options.
 | <a id="kt_kotlinc_options-x_use_fir_lt"></a>x_use_fir_lt |  Compile using LightTree parser with Front-end IR. Warning: this feature is far from being production-ready   | Boolean | optional |  `False`  |
 | <a id="kt_kotlinc_options-x_use_k2"></a>x_use_k2 |  Compile using experimental K2. K2 is a new compiler pipeline, no compatibility guarantees are yet provided   | Boolean | optional |  `False`  |
 | <a id="kt_kotlinc_options-x_warning_level"></a>x_warning_level |  Suppress specific warnings globally. Ex: 'OPTION': '(error\|warning\|disabled)'   | <a href="https://bazel.build/rules/lib/core/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="kt_kotlinc_options-x_wasm_attach_js_exception"></a>x_wasm_attach_js_exception |  Attach a thrown JavaScript exception to the Kotlin exception that wraps it. Kotlin/WasmJs only.   | Boolean | optional |  `False`  |
+| <a id="kt_kotlinc_options-x_wasm_generate_closed_world_multimodule"></a>x_wasm_generate_closed_world_multimodule |  Link a closed-world application into one Wasm module per klib. Kotlin/WasmJs only.   | Boolean | optional |  `False`  |
+| <a id="kt_kotlinc_options-x_wasm_kclass_fqn"></a>x_wasm_kclass_fqn |  Support KClass::qualifiedName. Kotlin/WasmJs only.   | Boolean | optional |  `False`  |
 | <a id="kt_kotlinc_options-x_when_guards"></a>x_when_guards |  Enable experimental language support for when guards.   | Boolean | optional |  `False`  |
 | <a id="kt_kotlinc_options-x_xlanguage"></a>x_xlanguage |  Enable or disable the specified language feature. Not intended for production use; prefer language_version or the dedicated feature flags.   | List of strings | optional |  `[]`  |
 
@@ -614,7 +619,7 @@ define_kt_toolchain(<a href="#define_kt_toolchain-name">name</a>, <a href="#defi
                     <a href="#define_kt_toolchain-experimental_reduce_classpath_mode">experimental_reduce_classpath_mode</a>, <a href="#define_kt_toolchain-experimental_multiplex_workers">experimental_multiplex_workers</a>,
                     <a href="#define_kt_toolchain-experimental_multiplex_sandboxing">experimental_multiplex_sandboxing</a>, <a href="#define_kt_toolchain-supports_path_mapping">supports_path_mapping</a>,
                     <a href="#define_kt_toolchain-experimental_build_tools_api">experimental_build_tools_api</a>, <a href="#define_kt_toolchain-btapi_runtime">btapi_runtime</a>, <a href="#define_kt_toolchain-javac_options">javac_options</a>, <a href="#define_kt_toolchain-kotlinc_options">kotlinc_options</a>,
-                    <a href="#define_kt_toolchain-jvm_stdlibs">jvm_stdlibs</a>, <a href="#define_kt_toolchain-jvm_runtime">jvm_runtime</a>, <a href="#define_kt_toolchain-jacocorunner">jacocorunner</a>, <a href="#define_kt_toolchain-exec_compatible_with">exec_compatible_with</a>,
+                    <a href="#define_kt_toolchain-jvm_stdlibs">jvm_stdlibs</a>, <a href="#define_kt_toolchain-jvm_runtime">jvm_runtime</a>, <a href="#define_kt_toolchain-wasmjs_stdlibs">wasmjs_stdlibs</a>, <a href="#define_kt_toolchain-jacocorunner">jacocorunner</a>, <a href="#define_kt_toolchain-exec_compatible_with">exec_compatible_with</a>,
                     <a href="#define_kt_toolchain-target_compatible_with">target_compatible_with</a>, <a href="#define_kt_toolchain-target_settings">target_settings</a>)
 </pre>
 
@@ -654,9 +659,154 @@ libraries they need, and the internal compiler plugins in the embeddable dialect
 | <a id="define_kt_toolchain-kotlinc_options"></a>kotlinc_options |  <p align="center"> - </p>   |  `Label("@rules_kotlin//kotlin/internal:default_kotlinc_options")` |
 | <a id="define_kt_toolchain-jvm_stdlibs"></a>jvm_stdlibs |  <p align="center"> - </p>   |  `None` |
 | <a id="define_kt_toolchain-jvm_runtime"></a>jvm_runtime |  <p align="center"> - </p>   |  `None` |
+| <a id="define_kt_toolchain-wasmjs_stdlibs"></a>wasmjs_stdlibs |  the `KtWasmJsInfo` targets every Kotlin/WasmJs target compiles and links against. Defaults to the standard library of the compiler distribution. An empty list leaves the standard library to the dependencies.   |  `None` |
 | <a id="define_kt_toolchain-jacocorunner"></a>jacocorunner |  <p align="center"> - </p>   |  `None` |
 | <a id="define_kt_toolchain-exec_compatible_with"></a>exec_compatible_with |  <p align="center"> - </p>   |  `None` |
 | <a id="define_kt_toolchain-target_compatible_with"></a>target_compatible_with |  <p align="center"> - </p>   |  `None` |
 | <a id="define_kt_toolchain-target_settings"></a>target_settings |  <p align="center"> - </p>   |  `None` |
+
+
+<!-- Generated with Stardoc: http://skydoc.bazel.build -->
+
+Public Kotlin/WasmJs rule API.
+
+<a id="kt_wasmjs_binary"></a>
+
+## kt_wasmjs_binary
+
+<pre>
+load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_binary")
+
+kt_wasmjs_binary(<a href="#kt_wasmjs_binary-name">name</a>, <a href="#kt_wasmjs_binary-ir_output_name">ir_output_name</a>, <a href="#kt_wasmjs_binary-kotlinc_opts">kotlinc_opts</a>, <a href="#kt_wasmjs_binary-module">module</a>, <a href="#kt_wasmjs_binary-module_name">module_name</a>, <a href="#kt_wasmjs_binary-optimize">optimize</a>,
+                 <a href="#kt_wasmjs_binary-source_map_base_dirs">source_map_base_dirs</a>, <a href="#kt_wasmjs_binary-source_map_prefix">source_map_prefix</a>, <a href="#kt_wasmjs_binary-source_maps">source_maps</a>)
+</pre>
+
+Links a `kt_wasmjs_library` and its transitive klibs into a Kotlin/WasmJs application
+directory. binaryen's wasm-opt can optimize the result, see the `optimize` attribute.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kt_wasmjs_binary-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kt_wasmjs_binary-ir_output_name"></a>ir_output_name |  The `-ir-output-name` of the compiler: the per-module JS and Wasm file names of the link. Defaults to `module_name`, then to the name of the target.   | String | optional |  `""`  |
+| <a id="kt_wasmjs_binary-kotlinc_opts"></a>kotlinc_opts |  Kotlin compiler options for this target. Without it, the target uses the `kotlinc_options` of the toolchain. The options that only the Kotlin/JVM compiler accepts are left out.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="kt_wasmjs_binary-module"></a>module |  The library whose klib is the entry point of the link (`-Xinclude`). Its transitive `link_klibs` are the `-libraries` of the link.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="kt_wasmjs_binary-module_name"></a>module_name |  The name of the linked module. It names the output files.   | String | optional |  `""`  |
+| <a id="kt_wasmjs_binary-optimize"></a>optimize |  Whether the output is the wasm-opt-optimized directory ("on") or the plain linked one ("off"). "auto" follows the build configuration: optimized in `--compilation_mode=opt` builds only.   | String | optional |  `"auto"`  |
+| <a id="kt_wasmjs_binary-source_map_base_dirs"></a>source_map_base_dirs |  The `-source-map-base-dirs` of the compiler: the roots that the `sources` entries of the source maps are relative to. The first match wins, and a source under no root becomes its bare file name. The roots are relative to the exec root. The default `.` is the exec root, the only root that matches every source path. The link passes the roots only with `source_map_prefix`.   | List of strings | optional |  `["."]`  |
+| <a id="kt_wasmjs_binary-source_map_prefix"></a>source_map_prefix |  The `-source-map-prefix` of the compiler, prepended to every `sources` entry of the source maps. It also makes those paths relative to `source_map_base_dirs`, and not to the link output directory. That keeps `..` out of them.   | String | optional |  `""`  |
+| <a id="kt_wasmjs_binary-source_maps"></a>source_maps |  Whether the link emits source maps (`-source-map`).   | Boolean | optional |  `True`  |
+
+
+<a id="kt_wasmjs_import"></a>
+
+## kt_wasmjs_import
+
+<pre>
+load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_import")
+
+kt_wasmjs_import(<a href="#kt_wasmjs_import-name">name</a>, <a href="#kt_wasmjs_import-deps">deps</a>, <a href="#kt_wasmjs_import-exported_compiler_plugins">exported_compiler_plugins</a>, <a href="#kt_wasmjs_import-exported_deps">exported_deps</a>, <a href="#kt_wasmjs_import-klib">klib</a>, <a href="#kt_wasmjs_import-neverlink">neverlink</a>,
+                 <a href="#kt_wasmjs_import-npm_packages">npm_packages</a>, <a href="#kt_wasmjs_import-source_jar">source_jar</a>)
+</pre>
+
+Imports a prebuilt Kotlin/WasmJs klib.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kt_wasmjs_import-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kt_wasmjs_import-deps"></a>deps |  Dependencies of the klib. They reach the link path of the dependents transitively.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_import-exported_compiler_plugins"></a>exported_compiler_plugins |  Compiler plugins that apply to the direct dependents of this target.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_import-exported_deps"></a>exported_deps |  Dependencies of the klib that are also on the compiler library path of the direct dependents. They reach the link path of the dependents transitively.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_import-klib"></a>klib |  The klib. It is on the compiler library path of the direct dependents.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="kt_wasmjs_import-neverlink"></a>neverlink |  Whether this target is only on the compiler library path. A neverlink target, its runtime closure and its npm packages never reach a link. Use it for a library that the runtime host of the binary supplies.   | Boolean | optional |  `False`  |
+| <a id="kt_wasmjs_import-npm_packages"></a>npm_packages |  Bare import specifier to npm package files, for the npm packages that the klib needs at runtime, as its embedded `package.json` declares. The npm packages of the dependencies propagate automatically.   | Dictionary: String -> Label | optional |  `{}`  |
+| <a id="kt_wasmjs_import-source_jar"></a>source_jar |  The sources of the klib.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+
+
+<a id="kt_wasmjs_library"></a>
+
+## kt_wasmjs_library
+
+<pre>
+load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_library")
+
+kt_wasmjs_library(<a href="#kt_wasmjs_library-name">name</a>, <a href="#kt_wasmjs_library-deps">deps</a>, <a href="#kt_wasmjs_library-srcs">srcs</a>, <a href="#kt_wasmjs_library-data">data</a>, <a href="#kt_wasmjs_library-exports">exports</a>, <a href="#kt_wasmjs_library-fragment_refines">fragment_refines</a>, <a href="#kt_wasmjs_library-fragment_sources">fragment_sources</a>,
+                  <a href="#kt_wasmjs_library-ir_output_name">ir_output_name</a>, <a href="#kt_wasmjs_library-kotlinc_opts">kotlinc_opts</a>, <a href="#kt_wasmjs_library-module_name">module_name</a>, <a href="#kt_wasmjs_library-neverlink">neverlink</a>, <a href="#kt_wasmjs_library-plugins">plugins</a>, <a href="#kt_wasmjs_library-runtime_deps">runtime_deps</a>,
+                  <a href="#kt_wasmjs_library-runtime_npm_package_deps">runtime_npm_package_deps</a>)
+</pre>
+
+Compiles Kotlin sources into a Kotlin/WasmJs klib. `kt_wasmjs_binary` links it.
+
+The sources come from `srcs`, or from `fragment_sources` for a multiplatform compilation with
+fragments. The two attributes are exclusive.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="kt_wasmjs_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="kt_wasmjs_library-deps"></a>deps |  The libraries on the compiler library path of this target.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_library-srcs"></a>srcs |  The Kotlin source files of a compilation without fragments.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_library-data"></a>data |  The files needed by this target at runtime.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_library-exports"></a>exports |  Exported libraries. They are on the compiler library path of the direct dependents, as if the dependents depended on them.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_library-fragment_refines"></a>fragment_refines |  Maps fragment names to the fragments they refine (`-Xfragment-refines`).   | <a href="https://bazel.build/rules/lib/core/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
+| <a id="kt_wasmjs_library-fragment_sources"></a>fragment_sources |  Maps fragment names to their source files (`-Xfragment-sources`).   | Dictionary: String -> Label | optional |  `{}`  |
+| <a id="kt_wasmjs_library-ir_output_name"></a>ir_output_name |  The `-ir-output-name` of the compiler: the klib unique name, which determines the per-module file names of a multimodule link. Defaults to the module name.   | String | optional |  `""`  |
+| <a id="kt_wasmjs_library-kotlinc_opts"></a>kotlinc_opts |  Kotlin compiler options for this target. Without it, the target uses the `kotlinc_options` of the toolchain. The options that only the Kotlin/JVM compiler accepts are left out.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="kt_wasmjs_library-module_name"></a>module_name |  The name of the module. Without it, the name derives from the label: for example `//some/package/path:label_name` gives `some_package_path-label_name`.   | String | optional |  `""`  |
+| <a id="kt_wasmjs_library-neverlink"></a>neverlink |  Whether this target is only on the compiler library path. A neverlink target, its runtime closure and its npm packages never reach a link. Use it for a library that the runtime host of the binary supplies.   | Boolean | optional |  `False`  |
+| <a id="kt_wasmjs_library-plugins"></a>plugins |  The Kotlin compiler plugins of this compilation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_library-runtime_deps"></a>runtime_deps |  Libraries on the link path of the binaries only, not on the compiler library path.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="kt_wasmjs_library-runtime_npm_package_deps"></a>runtime_npm_package_deps |  Bare import specifier to npm package files, for the npm packages that this library needs at runtime. They reach the linked binaries transitively. For example `{"@js-joda/core": "@js_joda_core//:package"}`.   | Dictionary: String -> Label | optional |  `{}`  |
+
+
+<a id="KtWasmJsBinaryInfo"></a>
+
+## KtWasmJsBinaryInfo
+
+<pre>
+load("@rules_kotlin//kotlin:wasmjs.bzl", "KtWasmJsBinaryInfo")
+
+KtWasmJsBinaryInfo(<a href="#KtWasmJsBinaryInfo-dist_directory">dist_directory</a>, <a href="#KtWasmJsBinaryInfo-functions_map_directory">functions_map_directory</a>, <a href="#KtWasmJsBinaryInfo-npm_packages">npm_packages</a>)
+</pre>
+
+Linked Kotlin/WasmJs application; binaryen-optimized when the `optimize` attribute resolves to on.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="KtWasmJsBinaryInfo-dist_directory"></a>dist_directory |  Directory: the Kotlin/WasmJs application. When wasm-opt ran (see the `optimize` attribute) this is the linked output with every .wasm optimized by wasm-opt (non-wasm files copied through), otherwise the plain KotlinLinkWasmJs output (`<ir_output_name>-js`).    |
+| <a id="KtWasmJsBinaryInfo-functions_map_directory"></a>functions_map_directory |  Directory of per-wasm-file symbol maps (wasm-opt --symbolmap), named `<wasm basename without extension>.txt`. None unless wasm-opt ran.    |
+| <a id="KtWasmJsBinaryInfo-npm_packages"></a>npm_packages |  dict[str, struct(specifier, label, files)]: npm packages required at runtime by that binary, keyed by bare import specifier, merged from the transitive runtime closure of the linked module (each `files` is an npm package directory whose root contains a package.json).    |
+
+
+<a id="KtWasmJsInfo"></a>
+
+## KtWasmJsInfo
+
+<pre>
+load("@rules_kotlin//kotlin:wasmjs.bzl", "KtWasmJsInfo")
+
+KtWasmJsInfo(<a href="#KtWasmJsInfo-compile_klibs">compile_klibs</a>, <a href="#KtWasmJsInfo-klib">klib</a>, <a href="#KtWasmJsInfo-link_klibs">link_klibs</a>, <a href="#KtWasmJsInfo-npm_packages">npm_packages</a>, <a href="#KtWasmJsInfo-source_jar">source_jar</a>)
+</pre>
+
+Information required to compile Kotlin to Wasm/JS.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="KtWasmJsInfo-compile_klibs"></a>compile_klibs |  depset(File): klibs visible on the compiler library path of *direct* dependents.    |
+| <a id="KtWasmJsInfo-klib"></a>klib |  File: klib of this module, or None for a target without sources.    |
+| <a id="KtWasmJsInfo-link_klibs"></a>link_klibs |  depset(File): klibs that must be given to the Wasm/JS linker, propagated transitively.    |
+| <a id="KtWasmJsInfo-npm_packages"></a>npm_packages |  depset(struct(specifier, label, files)): npm packages required at runtime by a binary linked with that library, propagated transitively along the runtime (link) closure. `specifier` is the bare import specifier (the npm package name), `label` the npm package target, and `files` its files depset (an npm package directory whose root contains a package.json).    |
+| <a id="KtWasmJsInfo-source_jar"></a>source_jar |  File: sources of this module, or None.    |
 
 

@@ -77,6 +77,23 @@ def _toolchain_versions_by_default_test_impl(ctx):
 
 _toolchain_versions_by_default_test = analysistest.make(_toolchain_versions_by_default_test_impl)
 
+def _wasmjs_options_stay_off_the_jvm_compiler_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    argv = _kotlin_compile_action(env).argv
+
+    for flag in argv:
+        asserts.false(
+            env,
+            flag.startswith("-Xwasm"),
+            msg = "unexpected Kotlin/WasmJs flag %s on the KotlinCompile action" % flag,
+        )
+
+    return analysistest.end(env)
+
+_wasmjs_options_stay_off_the_jvm_compiler_test = analysistest.make(
+    _wasmjs_options_stay_off_the_jvm_compiler_test_impl,
+)
+
 def _rejects_a_malformed_plugin_order_constraint_test_impl(ctx):
     env = analysistest.begin(ctx)
     asserts.expect_failure(env, "must have the form <pluginId1>><pluginId2>")
@@ -123,6 +140,21 @@ def _kotlinc_options_contents():
     )
 
     kt_kotlinc_options(
+        name = "wasmjs_options",
+        tags = ["manual"],
+        x_wasm_attach_js_exception = True,
+        x_wasm_generate_closed_world_multimodule = True,
+        x_wasm_kclass_fqn = True,
+    )
+
+    kt_jvm_library(
+        name = "wasmjs_options_library",
+        srcs = ["language_options_kt_source"],
+        kotlinc_opts = ":wasmjs_options",
+        tags = ["manual"],
+    )
+
+    kt_kotlinc_options(
         name = "malformed_plugin_order_options",
         tags = ["manual"],
         x_compiler_plugin_order = ["first.plugin"],
@@ -145,6 +177,11 @@ def _kotlinc_options_contents():
         target_under_test = ":default_options_library",
     )
 
+    _wasmjs_options_stay_off_the_jvm_compiler_test(
+        name = "wasmjs_options_stay_off_the_jvm_compiler_test",
+        target_under_test = ":wasmjs_options_library",
+    )
+
     _rejects_a_malformed_plugin_order_constraint_test(
         name = "rejects_a_malformed_plugin_order_constraint_test",
         target_under_test = ":malformed_plugin_order_library",
@@ -158,6 +195,7 @@ def kotlinc_options_test_suite(name):
         tests = [
             ":language_options_reach_the_compiler_test",
             ":toolchain_versions_by_default_test",
+            ":wasmjs_options_stay_off_the_jvm_compiler_test",
             ":rejects_a_malformed_plugin_order_constraint_test",
         ],
     )

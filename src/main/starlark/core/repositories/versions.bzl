@@ -119,6 +119,20 @@ versions = struct(
         daemon_client_sha256 = "89532756fc258fbde177cf1654383f15127c048d17525141c922e9aa0969d997",
         script_runtime_sha256 = "fc5a19df78be445d84e8352e0d01098a6a8181324aa50c6f7bf850338e81e1b4",
     ),
+    # Binaryen, for wasm-opt. The Kotlin Gradle plugin of the compiler release uses this version.
+    BINARYEN = struct(
+        version = "125",
+        url_template = "https://github.com/WebAssembly/binaryen/releases/download/version_{version}/binaryen-version_{version}-{platform}.tar.gz",
+        strip_prefix_template = "binaryen-version_{version}",
+        sha256 = {
+            "aarch64-linux": "d0382de3c189a7cbb9fdda93e2966f4557f6a00f201e2c4937c27ca01cead4fc",
+            "arm64-macos": "28bab047c4ce845c5c1da111222ffee5fafcec0bbedd046ad8b3dcae0fd57076",
+            "arm64-windows": "eebde647c9f24bcd3b8988891ef3f3ab404877aa1317c868a7c39824ccacca0d",
+            "x86_64-linux": "7c3bc16599c8274a04d34a504fe4be2047884f900e0e2da2f6fb9cd667183be4",
+            "x86_64-macos": "72a98df1bfb81dd1e241d2b022e15c72edbd49e29d84abc6a1129c7d083072dd",
+            "x86_64-windows": "7d20f9f22ee1d1a195aecccb21390f8c599b5025219520c7c9f04673b39d2c20",
+        },
+    ),
     RULES_ANDROID = version(
         version = "0.7.3",
         url_templates = [

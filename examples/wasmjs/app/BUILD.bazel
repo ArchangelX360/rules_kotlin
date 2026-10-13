@@ -1,0 +1,11 @@
+load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_binary", "kt_wasmjs_library")
+
+kt_wasmjs_library(
+    name = "app",
+    srcs = ["Greeting.kt"],
+)
+
+kt_wasmjs_binary(
+    name = "app_binary",
+    module = ":app",
+)

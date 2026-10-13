@@ -1,6 +1,6 @@
 """Implementation of the rules_kotlin module extension."""
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file", "http_jar")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file", "http_jar")
 load(
     ":btapi_impl.bzl",
     "BTAPI_IMPL_DEFAULT_REPOSITORY",
@@ -87,6 +87,15 @@ def kotlin_repositories(
         version = versions.KOTLINX_COROUTINES_CORE_JVM,
         downloaded_file_path = "kotlinx-coroutines-core-jvm.jar",
     )
+
+    for platform, sha256 in versions.BINARYEN.sha256.items():
+        http_archive(
+            name = "binaryen_%s" % platform,
+            build_file = Label("//src/main/starlark/core/repositories:BUILD.binaryen.bazel"),
+            sha256 = sha256,
+            strip_prefix = versions.BINARYEN.strip_prefix_template.format(version = versions.BINARYEN.version),
+            urls = [versions.BINARYEN.url_template.format(version = versions.BINARYEN.version, platform = platform)],
+        )
 
     versions.use_repository(
         http_file,

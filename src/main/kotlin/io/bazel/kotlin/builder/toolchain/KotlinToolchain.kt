@@ -105,6 +105,25 @@ class KotlinToolchain private constructor(
         ).toPath()
     }
 
+    /**
+     * The legacy compiler classloader alone: the rules_kotlin compiler wrapper and the CLI
+     * compiler distribution. A worker that runs no JVM compiler plugins needs nothing else.
+     */
+    @JvmStatic
+    fun createCompilerClassLoader(): URLClassLoader =
+      compilerClassLoader(
+        listOf(
+          KOTLINC.verified().absoluteFile,
+          COMPILER.verified().absoluteFile,
+        ),
+      )
+
+    private fun compilerClassLoader(jars: List<File>): URLClassLoader =
+      URLClassLoader(
+        jars.map { it.toURI().toURL() }.toTypedArray(),
+        ClassLoader.getPlatformClassLoader(),
+      )
+
     @JvmStatic
     fun createToolchain(): KotlinToolchain =
       createToolchain(
@@ -169,12 +188,7 @@ class KotlinToolchain private constructor(
       )
   }
 
-  val classLoader by lazy {
-    URLClassLoader(
-      baseJars.map { it.toURI().toURL() }.toTypedArray(),
-      ClassLoader.getPlatformClassLoader(),
-    )
-  }
+  val classLoader by lazy { compilerClassLoader(baseJars) }
 
   /**
    * The classloader defining the Build Tools API host world ([btapiJars]); created on
@@ -193,19 +207,24 @@ class KotlinToolchain private constructor(
   )
 
   open class KotlincInvoker(
-    toolchain: KotlinToolchain,
+    classLoader: ClassLoader,
     clazz: String = "io.bazel.kotlin.compiler.BazelK2JVMCompiler",
   ) {
+    constructor(
+      toolchain: KotlinToolchain,
+      clazz: String = "io.bazel.kotlin.compiler.BazelK2JVMCompiler",
+    ) : this(toolchain.classLoader, clazz)
+
     private val compiler: Any
     private val execHandle: MethodHandle
     private val getCodeHandle: MethodHandle
 
     init {
-      val compilerClass = toolchain.classLoader.loadClass(clazz)
+      val compilerClass = classLoader.loadClass(clazz)
       val compilerInterface =
-        toolchain.classLoader.loadClass("io.bazel.kotlin.compiler.KotlinCompiler")
+        classLoader.loadClass("io.bazel.kotlin.compiler.KotlinCompiler")
       val exitCodeClass =
-        toolchain.classLoader.loadClass("org.jetbrains.kotlin.cli.common.ExitCode")
+        classLoader.loadClass("org.jetbrains.kotlin.cli.common.ExitCode")
 
       compiler = compilerInterface.cast(compilerClass.getConstructor().newInstance())
 

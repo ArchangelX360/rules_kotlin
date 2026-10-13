@@ -23,8 +23,6 @@ SHARD_COUNT = 3
                 # Exclude files in `examples`.
                 exclude = [
                     "*",
-                    # Node is currently broken.
-                    "node/**",
                     # Anvil is broken by a version upgrade.
                     "anvil/**",
                 ],

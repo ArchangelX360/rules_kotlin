@@ -24,6 +24,12 @@ rules_kotlin_extensions = use_extension(
 )
 use_repo(
     rules_kotlin_extensions,
+    "binaryen_aarch64-linux",
+    "binaryen_arm64-macos",
+    "binaryen_arm64-windows",
+    "binaryen_x86_64-linux",
+    "binaryen_x86_64-macos",
+    "binaryen_x86_64-windows",
     "btapi_impl",
     "com_github_google_ksp",
     "com_github_jetbrains_kotlin",
@@ -37,3 +43,5 @@ use_repo(
 )
 
 register_toolchains("//kotlin:default_toolchain")
+
+register_toolchains("//kotlin/internal/wasmjs/toolchains:all")

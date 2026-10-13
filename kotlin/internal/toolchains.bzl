@@ -49,6 +49,7 @@ load(
     "kt_javac_options",
     "kt_kotlinc_options",
 )
+load("//kotlin/internal/wasmjs:providers.bzl", "KtWasmJsInfo")
 
 def _stdlib_providers(target, neverlink):
     """One JavaInfo per Java output of a stdlib target.
@@ -99,6 +100,8 @@ def _kotlin_toolchain_impl(ctx):
         ksp2 = ctx.attr.ksp2,
         ksp2_invoker = ctx.attr.ksp2_invoker,
         kotlin_home = ctx.attr.kotlin_home,
+        wasmjs_builder = ctx.attr.wasmjs_builder,
+        wasmjs_stdlibs = ctx.attr.wasmjs_stdlibs,
         jvm_stdlibs = java_common.merge(compile_time_providers + runtime_providers),
         jvm_emit_jdeps = ctx.attr._jvm_emit_jdeps[BuildSettingInfo].value,
         execution_requirements = {
@@ -352,6 +355,18 @@ _kt_toolchain = rule(
             doc = """Enable path mapping for Kotlin actions. Requires experimental_multiplex_sandboxing.""",
             default = False,
         ),
+        "wasmjs_builder": attr.label(
+            doc = "the Kotlin/WasmJs builder executable",
+            default = Label("//src/main/kotlin:wasmjs_build"),
+            executable = True,
+            allow_files = True,
+            cfg = "exec",
+        ),
+        "wasmjs_stdlibs": attr.label_list(
+            doc = "The Kotlin/WasmJs standard libraries on the compiler library path and the link path of every Kotlin/WasmJs target.",
+            providers = [KtWasmJsInfo],
+            cfg = "target",
+        ),
         "_empty_jar": attr.label(
             doc = """Empty jar for exporting JavaInfos.""",
             allow_single_file = True,
@@ -440,6 +455,7 @@ def define_kt_toolchain(
         kotlinc_options = Label("//kotlin/internal:default_kotlinc_options"),
         jvm_stdlibs = None,
         jvm_runtime = None,
+        wasmjs_stdlibs = None,
         jacocorunner = None,
         exec_compatible_with = None,
         target_compatible_with = None,
@@ -464,6 +480,9 @@ def define_kt_toolchain(
             extension tag `btapi_impl_version` declares. A runtime built on either with `base`
             replaces single artifacts. A runtime is an explicit choice of the Build Tools API
             compilation, see `experimental_build_tools_api`.
+        wasmjs_stdlibs: the `KtWasmJsInfo` targets every Kotlin/WasmJs target compiles and links
+            against. Defaults to the standard library of the compiler distribution. An empty list
+            leaves the standard library to the dependencies.
         **kwargs: see the attributes of the toolchain rule.
     """
     impl_name = name + "_impl"
@@ -515,6 +534,9 @@ def define_kt_toolchain(
         ],
         jvm_runtime = jvm_runtime if jvm_runtime != None else [
             Label("//kotlin/compiler:kotlin-stdlib"),
+        ],
+        wasmjs_stdlibs = wasmjs_stdlibs if wasmjs_stdlibs != None else [
+            Label("//kotlin/compiler:kotlin-stdlib-wasm-js"),
         ],
     )
     native.toolchain(
