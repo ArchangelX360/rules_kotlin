@@ -1,0 +1,33 @@
+# Copyright 2018 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+# Build file of a Playwright chromium headless shell archive. The http_archive strips the top-level
+# directory, so the executable sits at the repository root.
+
+# The shell, and the ICU data, .pak resources and shared libraries that it loads from its own
+# directory at startup. All of them must reach the test runfiles.
+filegroup(
+    name = "files",
+    srcs = glob(
+        ["**"],
+        exclude = ["BUILD.bazel"],
+    ),
+    visibility = ["//visibility:public"],
+)
+
+# The executable alone: `headless_shell` or `headless_shell.exe`. No other file of the archive has
+# this prefix. The consumer takes one file, so a second match fails the build.
+filegroup(
+    name = "headless-shell",
+    srcs = glob(["headless_shell*"]),
+    visibility = ["//visibility:public"],
+)

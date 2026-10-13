@@ -20,6 +20,9 @@ release_archive(
     src_map = {
         "BUILD.release.bazel": "BUILD.bazel",
     },
+    deps = [
+        "//kotlin/internal/wasmjs/toolchains:pkg",
+    ],
 )
 
 bzl_library(
@@ -30,4 +33,9 @@ bzl_library(
         "//kotlin/internal/utils",
         "//src/main/starlark/core/plugin",
     ],
+)
+
+toolchain_type(
+    name = "browser_toolchain_type",
+    visibility = ["//visibility:public"],
 )
