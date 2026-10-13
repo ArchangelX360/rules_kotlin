@@ -23,6 +23,7 @@ load(
     "//src/main/starlark/core/options:opts.kotlinc.bzl",
     _KotlincOptions = "KotlincOptions",
     _kotlinc_options_to_flags = "kotlinc_options_to_flags",
+    _kotlinc_options_to_wasmjs_flags = "kotlinc_options_to_wasmjs_flags",
     _kt_kotlinc_options = "kt_kotlinc_options",
 )
 
@@ -34,4 +35,5 @@ kt_javac_options = _kt_javac_options
 # buildifier: disable=name-conventions
 KotlincOptions = _KotlincOptions
 kotlinc_options_to_flags = _kotlinc_options_to_flags
+kotlinc_options_to_wasmjs_flags = _kotlinc_options_to_wasmjs_flags
 kt_kotlinc_options = _kt_kotlinc_options

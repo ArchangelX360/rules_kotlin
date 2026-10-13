@@ -1,0 +1,36 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//kotlin:core.bzl", "define_kt_toolchain")
+load("//kotlin:wasmjs.bzl", "kt_wasmjs_binary", "kt_wasmjs_library")
+load(":wasmjs_test.bzl", "wasmjs_test_suite")
+
+wasmjs_test_suite(name = "wasmjs_tests")
+
+kt_wasmjs_library(
+    name = "greeting",
+    srcs = ["Greeting.kt"],
+)
+
+kt_wasmjs_library(
+    name = "main",
+    srcs = ["Main.kt"],
+    deps = [":greeting"],
+)
+
+kt_wasmjs_binary(
+    name = "binary",
+    module = ":main",
+)
+
+build_test(
+    name = "binary_build_test",
+    targets = [":binary"],
+)
+
+# A toolchain with multiplex sandboxing, for a manual check of the worker path resolution:
+# bazel build //src/test/starlark/internal/wasmjs:binary --worker_sandboxing \
+#   --experimental_worker_multiplex_sandboxing \
+#   --extra_toolchains=//src/test/starlark/internal/wasmjs:multiplex_sandboxing_toolchain
+define_kt_toolchain(
+    name = "multiplex_sandboxing_toolchain",
+    experimental_multiplex_sandboxing = True,
+)
