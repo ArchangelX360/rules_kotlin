@@ -31,15 +31,23 @@ use_repo(
     "binaryen_x86_64-macos",
     "binaryen_x86_64-windows",
     "btapi_impl",
+    "chromium_headless_shell_aarch64-linux",
+    "chromium_headless_shell_arm64-macos",
+    "chromium_headless_shell_x86_64-linux",
+    "chromium_headless_shell_x86_64-macos",
+    "chromium_headless_shell_x86_64-windows",
     "com_github_google_ksp",
     "com_github_jetbrains_kotlin",
     "com_github_pinterest_ktlint",
     "jarjar",
     "kotlin_build_tools_api",
+    "kotlin_test_wasm_js",
     "kotlinx_coroutines_core_jvm",
     "kotlinx_serialization_core_jvm",
     "kotlinx_serialization_json",
     "kotlinx_serialization_json_jvm",
+    "wasmjs_kotlin_web_helpers",
+    "wasmjs_mocha",
 )
 
 register_toolchains("//kotlin:default_toolchain")

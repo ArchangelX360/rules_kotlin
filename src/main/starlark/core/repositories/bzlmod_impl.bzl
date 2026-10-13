@@ -20,7 +20,8 @@ def kotlin_repositories(
         ksp_repository_name = _KSP_COMPILER_PLUGIN_REPO,
         compiler_release = versions.KOTLIN_CURRENT_COMPILER_RELEASE,
         ksp_compiler_release = versions.KSP_CURRENT_COMPILER_PLUGIN_RELEASE,
-        btapi_impl_releases = None):
+        btapi_impl_releases = None,
+        kotlin_test_wasm_js_release = versions.KOTLIN_TEST_WASM_JS):
     """Sets up the Kotlin compiler repositories for the Bzlmod module extension.
 
     Args:
@@ -31,6 +32,8 @@ def kotlin_repositories(
         btapi_impl_releases: the Build Tools API implementation records, a dict of repository
          name to a record built with btapi_impl_version. The record of the current release is
          always created as @btapi_impl unless the dict replaces it.
+        kotlin_test_wasm_js_release: version provider of the Kotlin/WasmJs kotlin-test klib. It
+         must match the compiler release.
     """
 
     kotlin_compiler_repository(
@@ -88,6 +91,13 @@ def kotlin_repositories(
         downloaded_file_path = "kotlinx-coroutines-core-jvm.jar",
     )
 
+    versions.use_repository(
+        http_file,
+        name = "kotlin_test_wasm_js",
+        version = kotlin_test_wasm_js_release,
+        downloaded_file_path = "kotlin-test-wasm-js.klib",
+    )
+
     for platform, sha256 in versions.BINARYEN.sha256.items():
         http_archive(
             name = "binaryen_%s" % platform,
@@ -96,6 +106,32 @@ def kotlin_repositories(
             strip_prefix = versions.BINARYEN.strip_prefix_template.format(version = versions.BINARYEN.version),
             urls = [versions.BINARYEN.url_template.format(version = versions.BINARYEN.version, platform = platform)],
         )
+
+    for platform, (archive, archive_root, sha256) in versions.CHROMIUM_HEADLESS_SHELL.archives.items():
+        http_archive(
+            name = "chromium_headless_shell_%s" % platform,
+            build_file = Label("//src/main/starlark/core/repositories:BUILD.chromium_headless_shell.bazel"),
+            sha256 = sha256,
+            strip_prefix = archive_root,
+            urls = [versions.CHROMIUM_HEADLESS_SHELL.url_template.format(
+                version = versions.CHROMIUM_HEADLESS_SHELL.version,
+                archive = archive,
+            )],
+        )
+
+    versions.use_repository(
+        http_archive,
+        name = "wasmjs_mocha",
+        version = versions.MOCHA,
+        build_file_content = 'exports_files(["mocha.js"], visibility = ["//visibility:public"])',
+    )
+
+    versions.use_repository(
+        http_archive,
+        name = "wasmjs_kotlin_web_helpers",
+        version = versions.KOTLIN_WEB_HELPERS,
+        build_file_content = 'exports_files(["dist/kotlin-test-mocha-browser-runner.js"], visibility = ["//visibility:public"])',
+    )
 
     versions.use_repository(
         http_file,
@@ -115,6 +151,15 @@ def kotlinc_version(release, sha256):
         version = release,
         url_templates = [
             "https://github.com/JetBrains/kotlin/releases/download/v{version}/kotlin-compiler-{version}.zip",
+        ],
+        sha256 = sha256,
+    )
+
+def kotlin_test_wasm_js_version(release, sha256):
+    return version(
+        version = release,
+        url_templates = [
+            "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-test-wasm-js/{version}/kotlin-test-wasm-js-{version}.klib",
         ],
         sha256 = sha256,
     )
@@ -160,12 +205,18 @@ def configure_modules_and_repositories(modules, kotlin_repositories, kotlinc_ver
         ksp_version: constructor for a KSP version override.
     """
     kotlinc = None
+    kotlin_test_wasm_js = None
     ksp = None
     for mod in modules:
         for override in mod.tags.kotlinc_version:
             if kotlinc:
                 fail("Only one kotlinc_version is supported right now!")
             kotlinc = kotlinc_version(release = override.version, sha256 = override.sha256)
+            if override.kotlin_test_wasm_js_sha256:
+                kotlin_test_wasm_js = kotlin_test_wasm_js_version(
+                    release = override.version,
+                    sha256 = override.kotlin_test_wasm_js_sha256,
+                )
         for override in mod.tags.ksp_version:
             if ksp:
                 fail("Only one ksp_version is supported right now!")
@@ -175,6 +226,8 @@ def configure_modules_and_repositories(modules, kotlin_repositories, kotlinc_ver
     kotlin_repositories_args = dict()
     if kotlinc:
         kotlin_repositories_args["compiler_release"] = kotlinc
+    if kotlin_test_wasm_js:
+        kotlin_repositories_args["kotlin_test_wasm_js_release"] = kotlin_test_wasm_js
     if ksp:
         kotlin_repositories_args["ksp_compiler_release"] = ksp
     if btapi_impl_releases:
@@ -184,6 +237,17 @@ def configure_modules_and_repositories(modules, kotlin_repositories, kotlinc_ver
 
 _version_tag = tag_class(
     attrs = {
+        "sha256": attr.string(mandatory = True),
+        "version": attr.string(mandatory = True),
+    },
+)
+
+_kotlinc_version_tag = tag_class(
+    attrs = {
+        "kotlin_test_wasm_js_sha256": attr.string(
+            doc = "sha256 of the Kotlin/WasmJs kotlin-test klib of this version. Without it, " +
+                  "the klib keeps the default compiler version.",
+        ),
         "sha256": attr.string(mandatory = True),
         "version": attr.string(mandatory = True),
     },
@@ -210,6 +274,6 @@ _btapi_impl_version_tag = tag_class(
 
 tag_classes = {
     "btapi_impl_version": _btapi_impl_version_tag,
-    "kotlinc_version": _version_tag,
+    "kotlinc_version": _kotlinc_version_tag,
     "ksp_version": _version_tag,
 }

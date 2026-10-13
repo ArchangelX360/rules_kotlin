@@ -119,6 +119,15 @@ versions = struct(
         daemon_client_sha256 = "89532756fc258fbde177cf1654383f15127c048d17525141c922e9aa0969d997",
         script_runtime_sha256 = "fc5a19df78be445d84e8352e0d01098a6a8181324aa50c6f7bf850338e81e1b4",
     ),
+    # The kotlin-test klib for Kotlin/WasmJs. The kotlinc distribution ships the Kotlin/WasmJs
+    # standard library, but not this klib. Keep it on the compiler version.
+    KOTLIN_TEST_WASM_JS = version(
+        version = _KOTLIN_CURRENT_RELEASE,
+        url_templates = [
+            "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-test-wasm-js/{version}/kotlin-test-wasm-js-{version}.klib",
+        ],
+        sha256 = "e4b940e964cee502daa659d985a776f27ffe4543ec2636ab720ae60c936dad95",
+    ),
     # Binaryen, for wasm-opt. The Kotlin Gradle plugin of the compiler release uses this version.
     BINARYEN = struct(
         version = "125",
@@ -132,6 +141,36 @@ versions = struct(
             "x86_64-macos": "72a98df1bfb81dd1e241d2b022e15c72edbd49e29d84abc6a1129c7d083072dd",
             "x86_64-windows": "7d20f9f22ee1d1a195aecccb21390f8c599b5025219520c7c9f04673b39d2c20",
         },
+    ),
+    # The chromium headless shell that kt_wasmjs_test runs the tests in: the Playwright build of
+    # revision 1194 (Playwright 1.56.1, chromium 141.0.7390.37). Bump the revision and all hashes
+    # together. Playwright publishes no arm64 Windows build.
+    CHROMIUM_HEADLESS_SHELL = struct(
+        version = "1194",
+        url_template = "https://playwright.azureedge.net/builds/chromium/{version}/chromium-headless-shell-{archive}.zip",
+        # platform -> (archive infix, archive top-level directory, sha256)
+        archives = {
+            "aarch64-linux": ("linux-arm64", "chrome-linux", "6b963b7651119c81fa51312c1176429d3235bbefb56d5c687730cf44a5b1fdd7"),
+            "arm64-macos": ("mac-arm64", "chrome-mac", "c4c97caab34c16f9a2bb411da0e68505deacb35c86d70db63dc117381a5e6d60"),
+            "x86_64-linux": ("linux", "chrome-linux", "d745c7210cc88b73c7991a22c9624819960d84bc3de77ac7336d2de841a8c91f"),
+            "x86_64-macos": ("mac", "chrome-mac", "a84cf791a7c7d195c3fdfced9e28c591383522d396a15242602304587b825755"),
+            "x86_64-windows": ("win64", "chrome-win", "c745ef87016c69b11f461ca5eced32c69abcf1ae450e37b450585de9f446e103"),
+        },
+    ),
+    # The kotlin-test browser runner of the Kotlin Gradle plugin: mocha runs the kotlin-test suites,
+    # and the kotlin-web-helpers bundle adds the kotlin-test adapter and the TeamCity reporter. Keep
+    # mocha at the version that the static/test.html of kotlin-web-helpers loads.
+    MOCHA = version(
+        version = "11.8.0",
+        url_templates = ["https://registry.npmjs.org/mocha/-/mocha-{version}.tgz"],
+        sha256 = "c84b52ae4f0310df25707771c89e97299e01ef139b42e2c51b118c25f771bb49",
+        strip_prefix_template = "package",
+    ),
+    KOTLIN_WEB_HELPERS = version(
+        version = "3.5.4",
+        url_templates = ["https://registry.npmjs.org/kotlin-web-helpers/-/kotlin-web-helpers-{version}.tgz"],
+        sha256 = "b77937a729c6955b14560b8c1ece7a9a1864434ffe2e437c85b63aa83142312e",
+        strip_prefix_template = "package",
     ),
     RULES_ANDROID = version(
         version = "0.7.3",

@@ -1,0 +1,167 @@
+# Copyright 2018 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+load("@rules_java//java:defs.bzl", "java_test")
+load("//kotlin:core.bzl", "kt_kotlinc_options")
+load("//kotlin:jvm.bzl", "kt_jvm_library")
+load("//kotlin:wasmjs.bzl", "kt_wasmjs_import", "kt_wasmjs_library", "kt_wasmjs_test")
+
+# End-to-end validation of kt_wasmjs_test: a real Kotlin/WasmJs kotlin-test module that exercises
+# the passing and ignored paths, package-relative testdata fetching, configuration scripts, npm
+# packages both explicit on the test (nanoid through npm_packages and the generated import map) and
+# propagated from the runtime closure of the module (the @js-joda/core package of the
+# kotlinx-datetime import, whose compiler-generated import must resolve), and module runtime files
+# (import-map remapped, with an awaited readiness export).
+
+kt_kotlinc_options(
+    name = "e2e_kotlinc_options",
+    x_optin = ["kotlin.js.ExperimentalWasmJsInterop"],
+)
+
+kt_wasmjs_import(
+    name = "kotlinx-datetime-wasm-js",
+    # The klib also needs kotlinx-serialization-core, which the e2e sources never reach.
+    klib = "@wasmjs_e2e_kotlinx_datetime_wasm_js//file",
+    # The embedded package.json of the klib requests @js-joda/core 3.2.0. The pinned archive is a
+    # newer, API-compatible version.
+    npm_packages = {"@js-joda/core": "@wasmjs_e2e_js_joda_core//:package"},
+)
+
+filegroup(
+    name = "e2e-sources",
+    srcs = glob(["src/**/*.kt"]),
+)
+
+kt_wasmjs_library(
+    name = "e2e-module",
+    testonly = True,
+    fragment_sources = {"wasmJsTest": ":e2e-sources"},
+    kotlinc_opts = ":e2e_kotlinc_options",
+    module_name = "wasmjs-test-e2e",
+    deps = [
+        # KotlinxDatetimeTest uses it, so the compiler generates the @js-joda/core import that the
+        # propagated npm package must resolve.
+        ":kotlinx-datetime-wasm-js",
+        "//kotlin/compiler:kotlin-test-wasm-js",
+    ],
+)
+
+kt_wasmjs_test(
+    name = "e2e",
+    awaited_imports = {"./marker.mjs": "ready"},
+    configuration_scripts = ["config/set-global.js"],
+    module = ":e2e-module",
+    module_name = "wasmjs-test-e2e",
+    module_runtime_files = {"./marker.mjs": "runtime/marker.mjs"},
+    npm_packages = {"nanoid": "@wasmjs_e2e_nanoid//:package"},
+    testdata = ["testdata/sample.txt"],
+)
+
+# The fixtures below are red on purpose: they fail, hang, or do not load. So they are `manual`.
+# :e2e-outcomes runs them through the --flagfile entry point of the runner, and checks their exit
+# codes and JUnit XML.
+
+[
+    kt_wasmjs_library(
+        name = "e2e-%s-module" % fixture,
+        testonly = True,
+        fragment_sources = {"wasmJsTest": ":e2e-%s-sources" % fixture},
+        kotlinc_opts = ":e2e_kotlinc_options",
+        module_name = "wasmjs-test-e2e-%s" % fixture,
+        deps = ["//kotlin/compiler:kotlin-test-wasm-js"],
+    )
+    for fixture in [
+        "failing",
+        "hanging",
+        "throwing",
+    ]
+]
+
+[
+    filegroup(
+        name = "e2e-%s-sources" % fixture,
+        srcs = glob(["%s/**/*.kt" % fixture]),
+    )
+    for fixture in [
+        "failing",
+        "hanging",
+        "throwing",
+    ]
+]
+
+[
+    kt_wasmjs_test(
+        name = "e2e-%s" % fixture,
+        module = ":e2e-%s-module" % fixture,
+        module_name = "wasmjs-test-e2e-%s" % fixture,
+        tags = ["manual"],
+    )
+    for fixture in [
+        "failing",
+        "hanging",
+        "throwing",
+    ]
+]
+
+kt_wasmjs_test(
+    name = "e2e-awaited-missing",
+    awaited_imports = {"./marker.mjs": "nonexistent"},
+    module = ":e2e-failing-module",
+    module_name = "wasmjs-awaited-missing",
+    module_runtime_files = {"./marker.mjs": "runtime/marker.mjs"},
+    tags = ["manual"],
+)
+
+kt_wasmjs_test(
+    name = "e2e-awaited-hanging",
+    awaited_imports = {"./never.mjs": "never"},
+    module = ":e2e-failing-module",
+    module_name = "wasmjs-awaited-hanging",
+    module_runtime_files = {"./never.mjs": "runtime/never.mjs"},
+    tags = ["manual"],
+)
+
+kt_jvm_library(
+    name = "e2e-outcomes-lib",
+    testonly = True,
+    srcs = glob(["outcomes/**/*.kt"]),
+    deps = [
+        "@bazel_tools//tools/java/runfiles",
+        "@kotlin_rules_maven_test//:junit_junit",
+    ],
+)
+
+# The anti-false-positive guarantee of kt_wasmjs_test, end to end: a failing, hanging, or
+# unloadable test module must fail the run with the reason in the JUnit XML. The green fixture
+# must report every one of its tests.
+java_test(
+    name = "e2e-outcomes",
+    size = "large",
+    data = [
+        ":e2e",
+        ":e2e-awaited-hanging",
+        ":e2e-awaited-missing",
+        ":e2e-failing",
+        ":e2e-hanging",
+        ":e2e-throwing",
+    ],
+    env = {
+        "E2E_AWAITED_HANGING": "$(rlocationpath :e2e-awaited-hanging)",
+        "E2E_AWAITED_MISSING": "$(rlocationpath :e2e-awaited-missing)",
+        "E2E_FAILING": "$(rlocationpath :e2e-failing)",
+        "E2E_GREEN": "$(rlocationpath :e2e)",
+        "E2E_HANGING": "$(rlocationpath :e2e-hanging)",
+        "E2E_THROWING": "$(rlocationpath :e2e-throwing)",
+    },
+    test_class = "io.bazel.kotlin.wasmjs.e2e.E2eOutcomesTest",
+    runtime_deps = [":e2e-outcomes-lib"],
+)

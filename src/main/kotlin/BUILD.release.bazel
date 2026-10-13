@@ -156,3 +156,16 @@ java_binary(
     visibility = ["//visibility:public"],
     runtime_deps = [":wasm_opt_worker"] + KOTLIN_STDLIBS,
 )
+
+# The runner of kt_wasmjs_test. The jar holds the harness and all its dependencies.
+java_import(
+    name = "wasmjs_harness",
+    jars = ["wasmjs_harness.jar"],
+)
+
+java_binary(
+    name = "wasmjs_test_harness",
+    main_class = "io.bazel.kotlin.wasmjs.harness.MainKt",
+    visibility = ["//visibility:public"],
+    runtime_deps = [":wasmjs_harness"],
+)

@@ -1,0 +1,33 @@
+# Copyright 2018 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+# Build file of an npm package archive from registry.npmjs.org, extracted with
+# strip_prefix = "package". kt_wasmjs_test serves `package` under /node_modules/<specifier>/, and
+# reads its package.json to resolve the import map entry.
+filegroup(
+    name = "package",
+    srcs = glob(
+        ["**"],
+        exclude = [
+            "BUILD.bazel",
+            "MODULE.bazel",
+            "WORKSPACE",
+        ],
+    ),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "package_json",
+    srcs = ["package.json"],
+    visibility = ["//visibility:public"],
+)

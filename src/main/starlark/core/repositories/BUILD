@@ -18,9 +18,11 @@ release_archive(
     name = "pkg",
     srcs = [
         "BUILD.binaryen.bazel",
+        "BUILD.chromium_headless_shell.bazel",
         "BUILD.com_github_google_ksp.bazel",
         "BUILD.com_github_jetbrains_kotlin.bazel",
         "BUILD.kotlin_capabilities.bazel",
+        "BUILD.npm.bazel",
         "btapi_impl.bzl",
         "bzlmod_impl.bzl",
         "bzlmod_setup.bzl",

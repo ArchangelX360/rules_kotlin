@@ -1,4 +1,4 @@
-load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_binary", "kt_wasmjs_library")
+load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_binary", "kt_wasmjs_library", "kt_wasmjs_test")
 
 kt_wasmjs_library(
     name = "app",
@@ -8,4 +8,20 @@ kt_wasmjs_library(
 kt_wasmjs_binary(
     name = "app_binary",
     module = ":app",
+)
+
+kt_wasmjs_library(
+    name = "app_test_lib",
+    testonly = True,
+    srcs = ["GreetingTest.kt"],
+    deps = [
+        ":app",
+        "@rules_kotlin//kotlin/compiler:kotlin-test-wasm-js",
+    ],
+)
+
+kt_wasmjs_test(
+    name = "app_test",
+    module = ":app_test_lib",
+    module_name = "app-test",
 )

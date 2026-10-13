@@ -810,3 +810,45 @@ Information required to compile Kotlin to Wasm/JS.
 | <a id="KtWasmJsInfo-source_jar"></a>source_jar |  File: sources of this module, or None.    |
 
 
+<a id="kt_wasmjs_test"></a>
+
+## kt_wasmjs_test
+
+<pre>
+load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_test")
+
+kt_wasmjs_test(<a href="#kt_wasmjs_test-name">name</a>, <a href="#kt_wasmjs_test-module">module</a>, <a href="#kt_wasmjs_test-module_name">module_name</a>, <a href="#kt_wasmjs_test-kotlinc_opts">kotlinc_opts</a>, <a href="#kt_wasmjs_test-testdata">testdata</a>, <a href="#kt_wasmjs_test-configuration_scripts">configuration_scripts</a>,
+               <a href="#kt_wasmjs_test-npm_packages">npm_packages</a>, <a href="#kt_wasmjs_test-module_runtime_files">module_runtime_files</a>, <a href="#kt_wasmjs_test-awaited_imports">awaited_imports</a>, <a href="#kt_wasmjs_test-size">size</a>, <a href="#kt_wasmjs_test-tags">tags</a>, <a href="#kt_wasmjs_test-visibility">visibility</a>, <a href="#kt_wasmjs_test-kwargs">**kwargs</a>)
+</pre>
+
+Runs the kotlin-test suites of a wasmjs_library in a hermetic headless browser.
+
+Links `module` with kt_wasmjs_binary, assembles a static web root out of symlinks (the
+linked module, `testdata`, `configuration_scripts`, npm packages, `module_runtime_files`),
+and runs it with the test harness: it generates the index.html test page,
+serves the root over a static server, and drives a chromium headless-shell over the
+DevTools protocol. The page runs the tests with mocha and the kotlin-web-helpers runner,
+like the Kotlin Gradle plugin does. The harness translates the TeamCity service messages
+of their reporter into the Bazel JUnit XML report.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="kt_wasmjs_test-name"></a>name |  name of the test target.   |  none |
+| <a id="kt_wasmjs_test-module"></a>module |  label providing KtWasmJsInfo; its klib is the `-Xinclude` linking entry point and must contain (or depend on) the kotlin-test tests to run. It needs `@rules_kotlin//kotlin/compiler:kotlin-test-wasm-js` in its deps.   |  none |
+| <a id="kt_wasmjs_test-module_name"></a>module_name |  name of the linked module, used for the emitted file names; cannot be derived from KtWasmJsInfo (the provider carries klibs only).   |  none |
+| <a id="kt_wasmjs_test-kotlinc_opts"></a>kotlinc_opts |  link-time kotlinc options; should match the options the module was compiled with (same contract as kt_wasmjs_binary).   |  `None` |
+| <a id="kt_wasmjs_test-testdata"></a>testdata |  files of this package served next to the page: tests fetch them with package-relative paths (e.g. `testdata/sample.txt`) and cannot reach outside the package.   |  `[]` |
+| <a id="kt_wasmjs_test-configuration_scripts"></a>configuration_scripts |  scripts loaded as classic `<script>` tags in `<head>`, in order, before the test module.   |  `[]` |
+| <a id="kt_wasmjs_test-npm_packages"></a>npm_packages |  bare import specifier -> npm package label, for example the `package` filegroup of `@rules_kotlin//src/main/starlark/core/repositories:BUILD.npm.bazel`; served under `/node_modules/` and resolved through a generated import map. The npm packages carried by the module's transitive `KtWasmJsInfo.npm_packages` are served automatically; this attribute is only for packages the test page needs beyond them.   |  `{}` |
+| <a id="kt_wasmjs_test-module_runtime_files"></a>module_runtime_files |  import specifier -> file, for the files the linked module expects next to its entrypoint (e.g. `{"./skiko.mjs": ..., "./skiko.wasm": ...}` for the skiko glue and its wasm). The specifier is written as the linked module imports it, relative to its own directory: it must start with `./` and must not contain `..`. Each file is served under `/_runtime/` at that path, and the page's import map redirects the module-adjacent URL there. An import map only applies to module imports: a file that the runtime fetches (e.g. `skiko.wasm`) resolves relative to the importing file, which is also served under `/_runtime/`.   |  `{}` |
+| <a id="kt_wasmjs_test-awaited_imports"></a>awaited_imports |  module_runtime_files specifier -> exported member the page awaits, in order, before the test entrypoint. For runtime that loads asynchronously but is used synchronously by tests: e.g. skiko exposes its skia bindings as lazy stubs and an `awaitSkiko` readiness promise; without the await, tests race its wasm instantiation.   |  `{}` |
+| <a id="kt_wasmjs_test-size"></a>size |  standard test size attribute.   |  `"medium"` |
+| <a id="kt_wasmjs_test-tags"></a>tags |  standard tags attribute.   |  `[]` |
+| <a id="kt_wasmjs_test-visibility"></a>visibility |  standard visibility attribute.   |  `None` |
+| <a id="kt_wasmjs_test-kwargs"></a>kwargs |  any other standard test attributes (timeout, flaky, env, ...).   |  none |
+
+
