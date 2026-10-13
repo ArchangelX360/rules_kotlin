@@ -68,16 +68,24 @@ use_repo(
     "binaryen_x86_64-macos",
     "binaryen_x86_64-windows",
     "btapi_impl",
+    "chromium_headless_shell_aarch64-linux",
+    "chromium_headless_shell_arm64-macos",
+    "chromium_headless_shell_x86_64-linux",
+    "chromium_headless_shell_x86_64-macos",
+    "chromium_headless_shell_x86_64-windows",
     "com_github_google_ksp",
     "com_github_jetbrains_kotlin",
     "com_github_jetbrains_kotlin_git",
     "com_github_pinterest_ktlint",
     "jarjar",
     "kotlin_build_tools_api",
+    "kotlin_test_wasm_js",
     "kotlinx_coroutines_core_jvm",
     "kotlinx_serialization_core_jvm",
     "kotlinx_serialization_json",
     "kotlinx_serialization_json_jvm",
+    "wasmjs_kotlin_web_helpers",
+    "wasmjs_mocha",
 )
 
 register_toolchains("//src/main/starlark/core/compile:cli_toolchain")
@@ -140,6 +148,70 @@ maven.override(
     target = "@rules_kotlin//kotlin/compiler:kotlin-stdlib-jdk8",
 )
 use_repo(maven, "kotlin_rules_maven", "unpinned_kotlin_rules_maven")
+
+# The runtime of kt_wasmjs_test, the browser test harness. The release archive ships the harness as
+# one deploy jar, so the release module has no such install. serviceMessages is published on
+# intellij-dependencies only.
+maven.install(
+    name = "kotlin_rules_wasmjs_harness_maven",
+    artifacts = [
+        "io.ktor:ktor-client-java-jvm:3.3.3",
+        "org.hildan.chrome:chrome-devtools-kotlin-jvm:8.3.0-1589152",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2",
+        # chrome-devtools-kotlin needs 1.10.0. ktor declares 1.9.0.
+        "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.10.0",
+        "org.jetbrains.kotlinx:kotlinx-serialization-json-io-jvm:1.10.0",
+        "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.10.0",
+        "org.jetbrains.teamcity:serviceMessages:2024.07",
+        "org.slf4j:slf4j-nop:2.0.17",
+    ],
+    # The harness runs on the standard library of the compiler distribution.
+    excluded_artifacts = [
+        "org.jetbrains.kotlin:kotlin-reflect",
+        "org.jetbrains.kotlin:kotlin-stdlib",
+        "org.jetbrains.kotlin:kotlin-stdlib-common",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8",
+    ],
+    fail_if_repin_required = True,
+    fetch_sources = True,
+    lock_file = "//:kotlin_rules_wasmjs_harness_maven_install.json",
+    repositories = MAVEN_REPOSITORIES + [
+        "https://packages.jetbrains.team/maven/p/ij/intellij-dependencies",
+    ],
+    version_conflict_policy = "pinned",
+)
+use_repo(maven, "kotlin_rules_wasmjs_harness_maven", "unpinned_kotlin_rules_wasmjs_harness_maven")
+
+# The npm packages and the klib of the kt_wasmjs_test end-to-end tests. The release module has none
+# of them.
+http_archive_dev = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_file_dev = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+# The kotlinx-datetime klib requests @js-joda/core 3.2.0. 5.7.0 is a newer, API-compatible version.
+http_archive_dev(
+    name = "wasmjs_e2e_js_joda_core",
+    build_file = "//src/main/starlark/core/repositories:BUILD.npm.bazel",
+    sha256 = "c603b2ca15a1304b9b5107019c5847a3f74a89873ac694589836959867ef9b90",
+    strip_prefix = "package",
+    url = "https://registry.npmjs.org/@js-joda/core/-/core-5.7.0.tgz",
+)
+
+http_archive_dev(
+    name = "wasmjs_e2e_nanoid",
+    build_file = "//src/main/starlark/core/repositories:BUILD.npm.bazel",
+    sha256 = "5cade80a39ccf4fd174c8e412eca13accfce36c9c2a0982b4ea23403d729a8d8",
+    strip_prefix = "package",
+    url = "https://registry.npmjs.org/nanoid/-/nanoid-6.0.0.tgz",
+)
+
+http_file_dev(
+    name = "wasmjs_e2e_kotlinx_datetime_wasm_js",
+    downloaded_file_path = "kotlinx-datetime-wasm-js-0.8.0.klib",
+    sha256 = "5d84e1a3fb30f15337bf78259ca76ca4bba67a7690d9ae07da9bdbc75b88b5ed",
+    url = "https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-datetime-wasm-js/0.8.0/kotlinx-datetime-wasm-js-0.8.0.klib",
+)
 
 # Artifacts used only by rules_kotlin's own tests, never by the builder or the released rules.
 maven_test = use_extension("@rules_jvm_external//:extensions.bzl", "maven", dev_dependency = True)

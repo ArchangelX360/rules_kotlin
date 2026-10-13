@@ -1,0 +1,421 @@
+# Copyright 2026 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""The Kotlin/WasmJs browser test rule."""
+
+load(":providers.bzl", "KtWasmJsBinaryInfo")
+load(":toolchains.bzl", "BROWSER_TOOLCHAIN_TYPE")
+load(":wasmjs.bzl", "kt_wasmjs_binary")
+
+def kt_wasmjs_test(
+        name,
+        module,
+        module_name,
+        kotlinc_opts = None,
+        testdata = [],
+        configuration_scripts = [],
+        npm_packages = {},
+        module_runtime_files = {},
+        awaited_imports = {},
+        size = "medium",
+        tags = [],
+        visibility = None,
+        **kwargs):
+    """Runs the kotlin-test suites of a wasmjs_library in a hermetic headless browser.
+
+    Links `module` with kt_wasmjs_binary, assembles a static web root out of symlinks (the
+    linked module, `testdata`, `configuration_scripts`, npm packages, `module_runtime_files`),
+    and runs it with the test harness: it generates the index.html test page,
+    serves the root over a static server, and drives a chromium headless-shell over the
+    DevTools protocol. The page runs the tests with mocha and the kotlin-web-helpers runner,
+    like the Kotlin Gradle plugin does. The harness translates the TeamCity service messages
+    of their reporter into the Bazel JUnit XML report.
+
+    Args:
+      name: name of the test target.
+      module: label providing KtWasmJsInfo; its klib is the `-Xinclude` linking entry point
+        and must contain (or depend on) the kotlin-test tests to run. It needs
+        `@rules_kotlin//kotlin/compiler:kotlin-test-wasm-js` in its deps.
+      module_name: name of the linked module, used for the emitted file names; cannot be
+        derived from KtWasmJsInfo (the provider carries klibs only).
+      kotlinc_opts: link-time kotlinc options; should match the options the module was
+        compiled with (same contract as kt_wasmjs_binary).
+      testdata: files of this package served next to the page: tests fetch them with
+        package-relative paths (e.g. `testdata/sample.txt`) and cannot reach outside the
+        package.
+      configuration_scripts: scripts loaded as classic `<script>` tags in `<head>`, in
+        order, before the test module.
+      npm_packages: bare import specifier -> npm package label, for example the `package`
+        filegroup of `@rules_kotlin//src/main/starlark/core/repositories:BUILD.npm.bazel`;
+        served under `/node_modules/` and resolved through a generated import map.
+        The npm packages carried by the module's transitive `KtWasmJsInfo.npm_packages` are
+        served automatically; this attribute is only for packages the test page needs beyond them.
+      module_runtime_files: import specifier -> file, for the files the linked module expects
+        next to its entrypoint (e.g. `{"./skiko.mjs": ..., "./skiko.wasm": ...}` for the skiko
+        glue and its wasm). The specifier is written as the linked module imports it, relative
+        to its own directory: it must start with `./` and must not contain `..`. Each file is
+        served under `/_runtime/` at that path, and the page's import map redirects the
+        module-adjacent URL there. An import map only applies to module imports: a file that
+        the runtime fetches (e.g. `skiko.wasm`) resolves relative to the importing file, which
+        is also served under `/_runtime/`.
+      awaited_imports: module_runtime_files specifier -> exported member the page awaits, in
+        order, before the test entrypoint. For runtime that loads asynchronously but is used
+        synchronously by tests: e.g. skiko exposes its skia bindings as lazy stubs and an
+        `awaitSkiko` readiness promise; without the await, tests race its wasm instantiation.
+      size: standard test size attribute.
+      tags: standard tags attribute.
+      visibility: standard visibility attribute.
+      **kwargs: any other standard test attributes (timeout, flaky, env, ...).
+    """
+    test_bin_name = "%s_bin" % name
+    binary_kwargs = {} if kotlinc_opts == None else {"kotlinc_opts": kotlinc_opts}
+    kt_wasmjs_binary(
+        name = test_bin_name,
+        module = module,
+        module_name = module_name,
+        ir_output_name = module_name,
+        # Test binaries never pay for wasm-opt (matches the Kotlin Gradle plugin, which
+        # builds wasmJs test binaries in development mode).
+        optimize = "off",
+        tags = tags + ["manual"],
+        testonly = True,
+        visibility = ["//visibility:private"],
+        **binary_kwargs
+    )
+    _wasmjs_browser_test(
+        name = name,
+        test_module_entrypoint = test_bin_name,
+        module_name = module_name,
+        test_data = testdata,
+        configuration_scripts = configuration_scripts,
+        npm_packages = npm_packages,
+        module_runtime_files = module_runtime_files,
+        awaited_imports = awaited_imports,
+        size = size,
+        tags = tags,
+        visibility = visibility,
+        **kwargs
+    )
+
+def _wasmjs_browser_test_impl(ctx):
+    static_prefix = "%s_static" % ctx.label.name
+    module_name = ctx.attr.module_name
+
+    # module_name lands in the flagfile (`=`-split option values) and in the generated page.
+    _validate_page_path(ctx, module_name)
+
+    static_root_marker = _static_root_marker(ctx, static_prefix)
+    dist_link = _linked_module(ctx, static_prefix, module_name)
+    config_links, config_paths = _configuration_scripts(ctx, static_prefix)
+    testdata_links = _testdata(ctx, static_prefix, module_name)
+    npm_links, npm_specifiers = _npm_packages(ctx, static_prefix)
+    runtime_links, runtime_paths = _module_runtime_files(ctx, static_prefix)
+    harness_links, mocha_path, kotlin_test_runner_path = _harness_scripts(ctx, static_prefix)
+    _validate_awaited_imports(ctx, runtime_paths)
+
+    browser = ctx.toolchains[BROWSER_TOOLCHAIN_TYPE]
+
+    # The browser command line (see _PLAYWRIGHT_CHROMIUM_FLAGS), one argument per line, read
+    # by the runner at test runtime.
+    browser_flagfile = ctx.actions.declare_file("%s.browser.flagfile" % ctx.label.name)
+    ctx.actions.write(output = browser_flagfile, content = "\n".join(_PLAYWRIGHT_CHROMIUM_FLAGS) + "\n")
+
+    # The runner invocation: a rule cannot inject argv into its own test execution, so the
+    # arguments are materialized as `<name>.flagfile` NEXT TO the `<name>` executable — the
+    # runner derives that path from the standard TEST_BINARY env var when started bare.
+    # Paths inside are rlocation-style (runfiles-root-relative, repo-mapped); everything the
+    # runner needs to generate and serve the test page at runtime is passed here.
+    flagfile = ctx.actions.declare_file("%s.flagfile" % ctx.label.name)
+    flag_args = ctx.actions.args()
+    flag_args.set_param_file_format("multiline")
+    flag_args.add("--browser-binary=%s" % _rlocation_path(ctx, browser.executable.short_path))
+    flag_args.add("--browser-flagfile=%s" % _rlocation_path(ctx, browser_flagfile.short_path))
+    flag_args.add("--browser-profile-dir=%s" % _BROWSER_PROFILE_DIR)
+    flag_args.add("--static-content-marker=%s" % _rlocation_path(ctx, static_root_marker.short_path))
+    flag_args.add("--entrypoint=%s-js/%s.mjs" % (module_name, module_name))
+    flag_args.add_all(config_paths, format_each = "--configuration-script=%s")
+    flag_args.add_all(npm_specifiers, format_each = "--npm-package=%s")
+    flag_args.add("--mocha-script=%s" % mocha_path)
+    flag_args.add("--kotlin-test-runner-script=%s" % kotlin_test_runner_path)
+
+    # The linked module directory is a single tree artifact, so runtime files cannot sit inside
+    # it; they are served under _runtime/ and the page's import map redirects module-adjacent
+    # imports (e.g. the linked module's `./skiko.mjs`) there.
+    flag_args.add_all([
+        "--import-remap=%s-js/%s=_runtime/%s" % (module_name, path, path)
+        for path in runtime_paths.values()
+    ])
+    flag_args.add_all([
+        "--awaited-import=_runtime/%s=%s" % (runtime_paths[specifier], member)
+        for specifier, member in ctx.attr.awaited_imports.items()
+    ])
+    ctx.actions.write(output = flagfile, content = flag_args)
+
+    executable = _runner_executable(ctx)
+    runfiles = ctx.runfiles(
+        files = [flagfile, browser_flagfile, static_root_marker, dist_link] +
+                config_links + testdata_links + npm_links + runtime_links + harness_links,
+        transitive_files = browser.files,
+    ).merge(ctx.attr._runner[DefaultInfo].default_runfiles).merge_all([
+        target[DefaultInfo].default_runfiles
+        for target in ctx.attr.test_data + ctx.attr.configuration_scripts
+    ])
+    return [DefaultInfo(executable = executable, runfiles = runfiles)]
+
+def _static_root_marker(ctx, static_prefix):
+    # The static root is only an output-path prefix shared by the symlinks below, never an artifact
+    # of its own, so it has no runfiles entry: a runfiles manifest lists files, and Bazel does not
+    # always materialize a runfiles directory to resolve a bare prefix against (on Windows it never
+    # does; `--noenable_runfiles` does the same anywhere). This empty marker gives the runner one
+    # real file to anchor on — its parent directory is the populated static root under both layouts.
+    marker = ctx.actions.declare_file("%s/%s" % (static_prefix, _STATIC_ROOT_MARKER))
+    ctx.actions.write(output = marker, content = "")
+    return marker
+
+def _linked_module(ctx, static_prefix, module_name):
+    # The whole linker output is served verbatim: a single directory symlink.
+    dist_link = ctx.actions.declare_directory("%s/%s-js" % (static_prefix, module_name))
+    ctx.actions.symlink(output = dist_link, target_file = ctx.attr.test_module_entrypoint[KtWasmJsBinaryInfo].dist_directory)
+    return dist_link
+
+def _configuration_scripts(ctx, static_prefix):
+    links = []
+    paths = []
+    seen = {}
+    for f in ctx.files.configuration_scripts:
+        _validate_page_path(ctx, f.basename)
+        if f.basename in seen:
+            fail("kt_wasmjs_test configuration_scripts basenames must be unique, got %s twice" % f.basename)
+        seen[f.basename] = True
+        link = ctx.actions.declare_file("%s/_config/%s" % (static_prefix, f.basename))
+        ctx.actions.symlink(output = link, target_file = f)
+        links.append(link)
+        paths.append("_config/%s" % f.basename)
+    return links, paths
+
+def _harness_scripts(ctx, static_prefix):
+    # The kotlin-test browser runner: served under _harness/, and loaded by the page as classic scripts.
+    links = []
+    paths = []
+    for f in [ctx.file._mocha_script, ctx.file._kotlin_test_runner_script]:
+        link = ctx.actions.declare_file("%s/_harness/%s" % (static_prefix, f.basename))
+        ctx.actions.symlink(output = link, target_file = f)
+        links.append(link)
+        paths.append("_harness/%s" % f.basename)
+    return links, paths[0], paths[1]
+
+def _testdata(ctx, static_prefix, module_name):
+    if ctx.label.package == "":
+        fail("kt_wasmjs_test targets must not live in a repository root package (the testdata path convention is package-relative)")
+    marker = ctx.label.package + "/"
+    reserved = [_STATIC_ROOT_MARKER, "index.html", "_config", "_harness", "_runtime", "node_modules", "%s-js" % module_name, "%s.flagfile" % ctx.label.name, "%s.browser.flagfile" % ctx.label.name]
+    links = []
+    for f in ctx.files.test_data:
+        owner = f.owner
+        index = f.short_path.find(marker)
+        if owner.repo_name != ctx.label.repo_name or owner.package != ctx.label.package or index == -1:
+            fail("kt_wasmjs_test testdata must live under the test's package //%s, got %s" % (ctx.label.package, f.short_path))
+        relative = f.short_path[index + len(marker):]
+        if relative.split("/")[0] in reserved:
+            fail("kt_wasmjs_test testdata path %s collides with the reserved static root entry %s" % (relative, relative.split("/")[0]))
+        link = ctx.actions.declare_file("%s/%s" % (static_prefix, relative))
+        ctx.actions.symlink(output = link, target_file = f)
+        links.append(link)
+    return links
+
+def _npm_packages(ctx, static_prefix):
+    # The npm packages of the module's transitive runtime closure (declared by kt_wasmjs_import/kt_wasmjs_library)
+    # are served automatically; the npm_packages attribute only adds packages beyond them.
+    transitive_npm_packages = ctx.attr.test_module_entrypoint[KtWasmJsBinaryInfo].npm_packages
+    npm_packages = {specifier: entry.files for specifier, entry in transitive_npm_packages.items()}
+    for specifier, target in ctx.attr.npm_packages.items():
+        transitive_entry = transitive_npm_packages.get(specifier)
+        if transitive_entry != None and transitive_entry.label != target.label:
+            fail("kt_wasmjs_test npm_packages entry '%s' (%s) conflicts with the npm package of the module's runtime closure (%s)" % (
+                specifier,
+                target.label,
+                transitive_entry.label,
+            ))
+        npm_packages[specifier] = target[DefaultInfo].files
+
+    links = []
+    specifiers = []
+    for specifier in sorted(npm_packages.keys()):
+        files = npm_packages[specifier]
+        _validate_page_path(ctx, specifier)
+        if specifier.startswith("/") or ".." in specifier:
+            fail("kt_wasmjs_test npm_packages specifier is not a bare specifier: %s" % specifier)
+        has_package_json = False
+        for f in files.to_list():
+            relative = _external_repo_relative_path(f)
+            link = ctx.actions.declare_file("%s/node_modules/%s/%s" % (static_prefix, specifier, relative))
+            ctx.actions.symlink(output = link, target_file = f)
+            links.append(link)
+            if relative == "package.json":
+                has_package_json = True
+        if not has_package_json:
+            fail("kt_wasmjs_test npm_packages entry %s has no package.json at its root (expose the package with the `package` filegroup of BUILD.npm.bazel)" % specifier)
+        specifiers.append(specifier)
+    return links, specifiers
+
+def _module_runtime_files(ctx, static_prefix):
+    # Returns the links and, for each specifier, the path relative to _runtime/ (the specifier
+    # without its `./`).
+    links = []
+    paths = {}
+    for specifier, target in ctx.attr.module_runtime_files.items():
+        _validate_page_path(ctx, specifier)
+        path = specifier[len("./"):]
+        if not specifier.startswith("./") or [segment for segment in path.split("/") if segment in ["", ".", ".."]]:
+            fail("kt_wasmjs_test module_runtime_files specifier must start with ./ and be a plain relative path, got %s" % specifier)
+        files = target[DefaultInfo].files.to_list()
+        if len(files) != 1:
+            fail("kt_wasmjs_test module_runtime_files entry %s must be exactly one file, got %d from %s" % (specifier, len(files), target.label))
+        link = ctx.actions.declare_file("%s/_runtime/%s" % (static_prefix, path))
+        ctx.actions.symlink(output = link, target_file = files[0])
+        links.append(link)
+        paths[specifier] = path
+    return links, paths
+
+def _validate_awaited_imports(ctx, runtime_paths):
+    for specifier, member in ctx.attr.awaited_imports.items():
+        if specifier not in runtime_paths:
+            fail("kt_wasmjs_test awaited_imports key %s is not a module_runtime_files specifier" % specifier)
+
+        # The harness enforces the strict JS-identifier shape; this only keeps the flagfile sane.
+        _validate_page_path(ctx, member)
+
+def _external_repo_relative_path(f):
+    if f.short_path.startswith("../"):
+        return f.short_path[len("../"):].split("/", 1)[1]
+    return f.short_path
+
+# Equivalent of a `rlocationpath` call but that works on a String (`rlocationpath` only can work on Label)
+def _rlocation_path(ctx, short_path):
+    """Turns a runfiles `short_path` into an rlocation path (rooted at the runfiles root)."""
+    if short_path.startswith("../"):
+        return short_path[len("../"):]
+    return "%s/%s" % (ctx.workspace_name, short_path)
+
+# The browser command line, one argument per line of `<name>.browser.flagfile`;
+# ${BROWSER_PROFILE_DIR} is substituted by the runner with the resolved --browser-profile-dir.
+_PLAYWRIGHT_CHROMIUM_FLAGS = [
+    # headless_shell is headless-only, but drivers conventionally still pass the flag
+    "--headless",
+    "--remote-debugging-port=0",
+    "--user-data-dir=${BROWSER_PROFILE_DIR}",
+    "--no-sandbox",
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--mute-audio",
+    "--hide-scrollbars",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    # Pin a valid locale so navigator.language(s) is never empty. On a CI host with no locale
+    # configured (LANG unset) headless chromium reports an empty language, and Compose's
+    # JsLocale.current then calls `new Intl.Locale("")`, which throws
+    # `RangeError: Incorrect locale information provided`. --lang drives navigator.language,
+    # --accept-lang drives navigator.languages.
+    "--lang=en-US",
+    "--accept-lang=en-US",
+    "about:blank",
+]
+
+# Relative: the runner resolves it under TEST_TMPDIR at test runtime.
+_BROWSER_PROFILE_DIR = "browser-profile"
+
+# The file the static root is anchored on, at its top level; see _static_root_marker. Never served:
+# the runner addresses the root through this file's parent, and requests go to the entries beside it.
+_STATIC_ROOT_MARKER = ".static-root"
+
+def _runner_executable(ctx):
+    windows_constraint = ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]
+    extension = ".exe" if ctx.target_platform_has_constraint(windows_constraint) else ""
+    executable = ctx.actions.declare_file(ctx.label.name + extension)
+
+    # The runner java_binary launcher relocates fine when symlinked: at test runtime it
+    # locates its runfiles through $TEST_SRCDIR/$RUNFILES_DIR, which Bazel always sets.
+    ctx.actions.symlink(
+        output = executable,
+        target_file = ctx.attr._runner[DefaultInfo].files_to_run.executable,
+        is_executable = True,
+    )
+    return executable
+
+def _validate_page_path(ctx, value):
+    for forbidden in ['"', "'", "<", ">", "\n", "\r", " ", "="]:
+        if forbidden in value:
+            fail("%s: not safe to embed in the test page: %r" % (ctx.label, value))
+
+_wasmjs_browser_test = rule(
+    doc = """Test rule running a linked Kotlin/WasmJs test module in a headless browser via the
+      test harness. The runner is started without arguments and locates its flagfile as
+      `$TEST_BINARY.flagfile` (written next to the test executable by this rule).""",
+    attrs = {
+        "awaited_imports": attr.string_dict(
+            doc = "module_runtime_files specifier -> exported member the page awaits, in order, before the test entrypoint (e.g. ./skiko.mjs -> awaitSkiko).",
+        ),
+        "configuration_scripts": attr.label_list(
+            allow_files = True,
+            doc = "Scripts loaded as <script> tags in <head>, in order, before the test module.",
+        ),
+        "module_name": attr.string(
+            mandatory = True,
+            doc = "Name of the linked module: the entrypoint is <module_name>-js/<module_name>.mjs.",
+        ),
+        "module_runtime_files": attr.string_keyed_label_dict(
+            allow_files = True,
+            doc = "Import specifier (`./skiko.mjs`) -> the one file the linked module expects at that path next to its entrypoint; served under /_runtime/ with import-map remapping of the module-adjacent URL.",
+        ),
+        "npm_packages": attr.string_keyed_label_dict(
+            allow_files = True,
+            doc = """Bare import specifier -> npm package files served under /node_modules/ and mapped in the
+              generated import map, in addition to the npm packages of the module's transitive runtime closure.""",
+        ),
+        "test_data": attr.label_list(
+            allow_files = True,
+            doc = "Files of this package served with package-relative paths next to the page.",
+        ),
+        "test_module_entrypoint": attr.label(
+            mandatory = True,
+            providers = [[KtWasmJsBinaryInfo]],
+            doc = "The kt_wasmjs_binary whose dist directory contains the test module entrypoint .mjs.",
+        ),
+        "_kotlin_test_runner_script": attr.label(
+            default = Label("@wasmjs_kotlin_web_helpers//:dist/kotlin-test-mocha-browser-runner.js"),
+            allow_single_file = True,
+        ),
+        "_mocha_script": attr.label(
+            default = Label("@wasmjs_mocha//:mocha.js"),
+            allow_single_file = True,
+        ),
+        "_runner": attr.label(
+            default = Label("//src/main/kotlin:wasmjs_test_harness"),
+            executable = True,
+            # The runner IS the test executable: it runs on the test host (target
+            # configuration), not in the execution configuration of build actions.
+            cfg = "target",
+        ),
+        "_windows_constraint": attr.label(
+            default = Label("@platforms//os:windows"),
+        ),
+    },
+    implementation = _wasmjs_browser_test_impl,
+    test = True,
+    # The browser toolchain gives the headless shell for the target platform, and everything it
+    # loads from its own directory at startup. The test serves them through the runfiles.
+    toolchains = [BROWSER_TOOLCHAIN_TYPE],
+)

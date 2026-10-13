@@ -22,3 +22,8 @@ toolchain_type(
     name = "wasm_opt_toolchain_type",
     visibility = ["//visibility:public"],
 )
+
+toolchain_type(
+    name = "browser_toolchain_type",
+    visibility = ["//visibility:public"],
+)

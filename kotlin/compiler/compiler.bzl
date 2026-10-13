@@ -67,13 +67,19 @@ def kt_configure_compiler():
     _import_artifacts(KOTLINC_ARTIFACTS.jvm, kt_jvm_import)
     _import_artifacts(KOTLINC_ARTIFACTS.core, kt_jvm_import)
 
-    # The Kotlin/WasmJs standard library of the compiler distribution.
+    # The Kotlin/WasmJs standard library of the compiler distribution, and the kotlin-test klib
+    # that the distribution does not ship.
     for (label, file) in KOTLINC_ARTIFACTS.wasmjs.runtime.items():
         kt_wasmjs_import(
             name = label,
             klib = "@%s//:%s" % (_KT_COMPILER_REPO, label),
             visibility = ["//visibility:public"],
         )
+    kt_wasmjs_import(
+        name = "kotlin-test-wasm-js",
+        klib = "@kotlin_test_wasm_js//file",
+        visibility = ["//visibility:public"],
+    )
 
     # The Build Tools API interfaces are distributed as a separate jar from Kotlin 2.4.0 onwards.
     kt_jvm_import(

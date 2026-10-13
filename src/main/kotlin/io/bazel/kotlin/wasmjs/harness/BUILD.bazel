@@ -1,0 +1,76 @@
+# Copyright 2018 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+load("@rules_java//java:defs.bzl", "java_binary")
+load("//kotlin:core.bzl", "kt_kotlinc_options")
+load("//kotlin:jvm.bzl", "kt_jvm_library")
+load("//kotlin:lint.bzl", "ktlint_fix", "ktlint_test")
+
+# The runner of kt_wasmjs_test: it serves the test page and drives a headless browser. It is a
+# test runtime, and not part of the builder, so the rules of this repository build it.
+# chrome-devtools-kotlin and ktor need JVM 11. The JDK HttpServer and Process APIs of the harness
+# need nothing newer than JVM 17.
+kt_kotlinc_options(
+    name = "harness_kotlinc_options",
+    jvm_target = "17",
+    visibility = ["//src:__subpackages__"],
+)
+
+kt_jvm_library(
+    name = "harness_lib",
+    srcs = glob(["**/*.kt"]),
+    kotlinc_opts = ":harness_kotlinc_options",
+    visibility = ["//src:__subpackages__"],
+    deps = [
+        "@bazel_tools//tools/java/runfiles",
+        "@kotlin_rules_wasmjs_harness_maven//:io_ktor_ktor_client_core_jvm",
+        "@kotlin_rules_wasmjs_harness_maven//:org_hildan_chrome_chrome_devtools_kotlin_jvm",
+        "@kotlin_rules_wasmjs_harness_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core_jvm",
+        "@kotlin_rules_wasmjs_harness_maven//:org_jetbrains_kotlinx_kotlinx_serialization_core_jvm",
+        "@kotlin_rules_wasmjs_harness_maven//:org_jetbrains_kotlinx_kotlinx_serialization_json_jvm",
+        "@kotlin_rules_wasmjs_harness_maven//:org_jetbrains_teamcity_serviceMessages",
+    ],
+)
+
+java_binary(
+    name = "harness",
+    main_class = "io.bazel.kotlin.wasmjs.harness.MainKt",
+    visibility = ["//src:__subpackages__"],
+    runtime_deps = [
+        ":harness_lib",
+        # The ktor engine that chrome-devtools-kotlin loads, and the slf4j binding that silences ktor.
+        "@kotlin_rules_wasmjs_harness_maven//:io_ktor_ktor_client_java_jvm",
+        "@kotlin_rules_wasmjs_harness_maven//:org_slf4j_slf4j_nop",
+    ],
+)
+
+ktlint_test(
+    name = "harness_lib_ktlint_test",
+    srcs = glob(["**/*.kt"]),
+    config = "//:ktlint_editorconfig",
+    tags = [
+        "ktlint",
+        "no-ide",
+    ],
+    visibility = ["//visibility:private"],
+)
+
+ktlint_fix(
+    name = "harness_lib_ktlint_fix",
+    srcs = glob(["**/*.kt"]),
+    config = "//:ktlint_editorconfig",
+    tags = [
+        "ktlint",
+        "no-ide",
+    ],
+    visibility = ["//visibility:public"],
+)
