@@ -26,4 +26,8 @@ bzl_library(
     name = "wasmjs",
     srcs = glob(["*.bzl"]),
     visibility = ["//kotlin:__subpackages__"],
+    deps = [
+        "//kotlin/internal/utils",
+        "//src/main/starlark/core/plugin",
+    ],
 )

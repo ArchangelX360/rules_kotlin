@@ -30,3 +30,29 @@ def npm_package_entries(npm_package_attr):
         )
         for specifier, target in npm_package_attr.items()
     ]
+
+def merged_npm_packages(entries, owner):
+    """Merges npm package entries into a dict keyed by specifier.
+
+    The npm packages of a linked binary live in a single flat `/node_modules/`, so a specifier
+    that two different targets provide fails.
+
+    Args:
+        entries: list of struct(specifier, label, files).
+        owner: the label to report in the failure.
+
+    Returns:
+        dict of specifier to struct(specifier, label, files).
+    """
+    merged = {}
+    for entry in entries:
+        existing = merged.get(entry.specifier)
+        if existing != None and existing.label != entry.label:
+            fail("%s requires the npm package '%s' from conflicting targets: %s and %s" % (
+                owner,
+                entry.specifier,
+                existing.label,
+                entry.label,
+            ))
+        merged[entry.specifier] = entry
+    return merged

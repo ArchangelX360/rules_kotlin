@@ -17,9 +17,89 @@ load(
     "//kotlin/internal:defs.bzl",
     _KtCompilerPluginInfo = "KtCompilerPluginInfo",
     _KtJvmInfo = "KtJvmInfo",
+    _KtPluginConfiguration = "KtPluginConfiguration",
+    _TOOLCHAIN_TYPE = "TOOLCHAIN_TYPE",
 )
-load(":npm.bzl", "npm_package_entries")
-load(":providers.bzl", "KtWasmJsInfo")
+load("//kotlin/internal:opts.bzl", "KotlincOptions")
+load(":compile.bzl", "wasmjs_compile_actions", "wasmjs_link_action")
+load(":npm.bzl", "merged_npm_packages", "npm_package_entries")
+load(":providers.bzl", "KtWasmJsBinaryInfo", "KtWasmJsInfo")
+
+_KOTLINC_OPTS_ATTR = attr.label(
+    doc = """Kotlin compiler options for this target. Without it, the target uses the
+      `kotlinc_options` of the toolchain. The options that only the Kotlin/JVM compiler accepts
+      are left out.""",
+    providers = [KotlincOptions],
+)
+
+def _kt_wasmjs_library_impl(ctx):
+    return wasmjs_compile_actions(ctx)
+
+kt_wasmjs_library = rule(
+    doc = """Compiles Kotlin sources into a Kotlin/WasmJs klib. `kt_wasmjs_binary` links it.
+
+The sources come from `srcs`, or from `fragment_sources` for a multiplatform compilation with
+fragments. The two attributes are exclusive.""",
+    attrs = {
+        "data": attr.label_list(
+            doc = "The files needed by this target at runtime.",
+            allow_files = True,
+        ),
+        "deps": attr.label_list(
+            doc = "The libraries on the compiler library path of this target.",
+            providers = [KtWasmJsInfo],
+        ),
+        "exports": attr.label_list(
+            doc = """Exported libraries. They are on the compiler library path of the direct
+              dependents, as if the dependents depended on them.""",
+            providers = [KtWasmJsInfo],
+        ),
+        "fragment_refines": attr.string_list_dict(
+            doc = "Maps fragment names to the fragments they refine (`-Xfragment-refines`).",
+        ),
+        "fragment_sources": attr.string_keyed_label_dict(
+            doc = "Maps fragment names to their source files (`-Xfragment-sources`).",
+            allow_files = [".kt"],
+        ),
+        "ir_output_name": attr.string(
+            doc = """The `-ir-output-name` of the compiler: the klib unique name, which determines
+              the per-module file names of a multimodule link. Defaults to the module name.""",
+        ),
+        "kotlinc_opts": _KOTLINC_OPTS_ATTR,
+        "module_name": attr.string(
+            doc = """The name of the module. Without it, the name derives from the label: for
+              example `//some/package/path:label_name` gives `some_package_path-label_name`.""",
+        ),
+        "neverlink": attr.bool(
+            doc = """Whether this target is only on the compiler library path. A neverlink target,
+              its runtime closure and its npm packages never reach a link. Use it for a library
+              that the runtime host of the binary supplies.""",
+            default = False,
+        ),
+        "plugins": attr.label_list(
+            doc = "The Kotlin compiler plugins of this compilation.",
+            cfg = "exec",
+            providers = [[_KtPluginConfiguration], [_KtCompilerPluginInfo]],
+        ),
+        "runtime_deps": attr.label_list(
+            doc = "Libraries on the link path of the binaries only, not on the compiler library path.",
+            providers = [KtWasmJsInfo],
+        ),
+        "runtime_npm_package_deps": attr.string_keyed_label_dict(
+            doc = """Bare import specifier to npm package files, for the npm packages that this
+              library needs at runtime. They reach the linked binaries transitively. For example
+              `{"@js-joda/core": "@js_joda_core//:package"}`.""",
+            allow_files = True,
+        ),
+        "srcs": attr.label_list(
+            doc = "The Kotlin source files of a compilation without fragments.",
+            allow_files = [".kt"],
+        ),
+    },
+    toolchains = [_TOOLCHAIN_TYPE],
+    implementation = _kt_wasmjs_library_impl,
+    provides = [KtWasmJsInfo, _KtJvmInfo],
+)
 
 def _kt_wasmjs_import_impl(ctx):
     deps = ctx.attr.deps + ctx.attr.exported_deps
@@ -81,4 +161,62 @@ kt_wasmjs_import = rule(
     },
     implementation = _kt_wasmjs_import_impl,
     provides = [KtWasmJsInfo, _KtJvmInfo],
+)
+
+def _kt_wasmjs_binary_impl(ctx):
+    module_info = ctx.attr.module[KtWasmJsInfo]
+    if module_info.klib == None:
+        fail("%s does not produce a klib (no sources?); kt_wasmjs_binary needs a klib to link via -Xinclude" % ctx.attr.module.label)
+
+    ir_output_name = ctx.attr.ir_output_name or ctx.attr.module_name or ctx.label.name
+    linked_dir = wasmjs_link_action(ctx, ir_output_name, module_info.klib, module_info.link_klibs)
+
+    return [
+        DefaultInfo(files = depset([linked_dir])),
+        KtWasmJsBinaryInfo(
+            dist_directory = linked_dir,
+            functions_map_directory = None,
+            npm_packages = merged_npm_packages(module_info.npm_packages.to_list(), ctx.label),
+        ),
+    ]
+
+kt_wasmjs_binary = rule(
+    doc = """Links a `kt_wasmjs_library` and its transitive klibs into a Kotlin/WasmJs application
+      directory.""",
+    attrs = {
+        "ir_output_name": attr.string(
+            doc = """The `-ir-output-name` of the compiler: the per-module JS and Wasm file names of
+              the link. Defaults to `module_name`, then to the name of the target.""",
+        ),
+        "kotlinc_opts": _KOTLINC_OPTS_ATTR,
+        "module": attr.label(
+            doc = """The library whose klib is the entry point of the link (`-Xinclude`). Its
+              transitive `link_klibs` are the `-libraries` of the link.""",
+            mandatory = True,
+            providers = [KtWasmJsInfo],
+        ),
+        "module_name": attr.string(
+            doc = "The name of the linked module. It names the output files.",
+        ),
+        "source_map_base_dirs": attr.string_list(
+            doc = """The `-source-map-base-dirs` of the compiler: the roots that the `sources`
+              entries of the source maps are relative to. The first match wins, and a source under
+              no root becomes its bare file name. The roots are relative to the exec root. The
+              default `.` is the exec root, the only root that matches every source path. The
+              link passes the roots only with `source_map_prefix`.""",
+            default = ["."],
+        ),
+        "source_map_prefix": attr.string(
+            doc = """The `-source-map-prefix` of the compiler, prepended to every `sources` entry of
+              the source maps. It also makes those paths relative to `source_map_base_dirs`, and
+              not to the link output directory. That keeps `..` out of them.""",
+        ),
+        "source_maps": attr.bool(
+            doc = "Whether the link emits source maps (`-source-map`).",
+            default = True,
+        ),
+    },
+    toolchains = [_TOOLCHAIN_TYPE],
+    implementation = _kt_wasmjs_binary_impl,
+    provides = [KtWasmJsBinaryInfo],
 )
