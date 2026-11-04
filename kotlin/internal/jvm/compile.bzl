@@ -27,9 +27,7 @@ load(
     "//kotlin/internal:defs.bzl",
     _JAVA_RUNTIME_TOOLCHAIN_TYPE = "JAVA_RUNTIME_TOOLCHAIN_TYPE",
     _JAVA_TOOLCHAIN_TYPE = "JAVA_TOOLCHAIN_TYPE",
-    _KtCompilerPluginInfo = "KtCompilerPluginInfo",
     _KtJvmInfo = "KtJvmInfo",
-    _KtPluginConfiguration = "KtPluginConfiguration",
     _TOOLCHAIN_TYPE = "TOOLCHAIN_TYPE",
 )
 load(
@@ -55,6 +53,10 @@ load(
 load(
     "//kotlin/internal/utils:utils.bzl",
     _utils = "utils",
+)
+load(
+    "//src/main/starlark/core/plugin:common.bzl",
+    _plugin_common = "plugin_common",
 )
 load(
     "//src/main/starlark/core/plugin:payload.bzl",
@@ -125,25 +127,6 @@ def _fail_if_invalid_associate_deps(associate_deps, deps):
 def _java_infos_to_compile_jars(java_infos):
     return depset(transitive = [j.compile_jars for j in java_infos])
 
-def _exported_plugins(deps):
-    """Encapsulates compiler dependency metadata."""
-    plugins = []
-    for dep in deps:
-        if _KtJvmInfo in dep and dep[_KtJvmInfo] != None:
-            plugins.extend(dep[_KtJvmInfo].exported_compiler_plugins.to_list())
-    return plugins
-
-def _collect_plugins_for_export(local, exports):
-    """Collects into a depset. """
-    return depset(
-        local,
-        transitive = [
-            e[_KtJvmInfo].exported_compiler_plugins
-            for e in exports
-            if _KtJvmInfo in e and e[_KtJvmInfo]
-        ],
-    )
-
 _CONVENTIONAL_RESOURCE_PATHS = [
     "src/main/java",
     "src/main/resources",
@@ -181,79 +164,6 @@ def _resource_path_relative_to_root(resource):
         return resource.path[len(root_prefix):]
 
     return resource.path
-
-def _new_plugins_from(targets):
-    """Returns a struct containing the plugin metadata for the given targets.
-
-    Args:
-        targets: A list of targets.
-    Returns:
-        A struct containing merged plugins and aggregate classpath/data.
-    """
-
-    all_plugins = {}
-    plugins_without_phase = []
-    for t in targets:
-        if _KtCompilerPluginInfo not in t:
-            continue
-        plugin = t[_KtCompilerPluginInfo]
-        if not (plugin.stubs or plugin.compile):
-            plugins_without_phase.append("%s: %s" % (t.label, plugin.id))
-        if plugin.id in all_plugins and all_plugins[plugin.id] != plugin:
-            # This need a more robust error messaging.
-            fail("has multiple plugins with the same id: %s." % plugin.id)
-        all_plugins[plugin.id] = plugin
-
-    if plugins_without_phase:
-        fail("has plugin without a phase defined: %s" % plugins_without_phase)
-
-    all_plugin_cfgs = {}
-    cfgs_without_plugin = []
-    for t in targets:
-        if _KtPluginConfiguration not in t:
-            continue
-        cfg = t[_KtPluginConfiguration]
-        if cfg.id not in all_plugins:
-            cfgs_without_plugin.append("%s: %s" % (t.label, cfg.id))
-        all_plugin_cfgs.setdefault(cfg.id, []).append(cfg)
-
-    if cfgs_without_plugin:
-        fail("has plugin configurations without corresponding plugins: %s" % cfgs_without_plugin)
-
-    classpath = []
-    data = []
-    plugins = []
-    for p in all_plugins.values():
-        plugin_classpath = [p.classpath]
-        plugin_options = list(p.options)
-        plugin_data = getattr(p, "data", None)
-        if plugin_data:
-            data.append(plugin_data)
-        if p.id in all_plugin_cfgs:
-            cfg = p.merge_cfgs(p, all_plugin_cfgs[p.id])
-            plugin_classpath.append(cfg.classpath)
-            data.append(cfg.data)
-            plugin_options.extend(cfg.options)
-
-        phases = []
-        if p.compile:
-            phases.append("compile")
-        if p.stubs:
-            phases.append("stubs")
-
-        plugins.append(struct(
-            id = p.id,
-            phases = phases,
-            classpath = depset(transitive = plugin_classpath),
-            options = plugin_options,
-        ))
-        classpath.extend(plugin_classpath)
-
-    return struct(
-        classpath = depset(transitive = classpath),
-        data = depset(transitive = data),
-        plugins = plugins,
-    )
 
 # INTERNAL ACTIONS #####################################################################################################
 
@@ -887,7 +797,7 @@ def _kt_jvm_produce_output_jar_actions(
     ksp_options = _plugin_mappers.targets_to_ksp_options(ctx.attr.plugins + ctx.attr.deps)
     transitive_runtime_jars = _plugin_mappers.targets_to_transitive_runtime_jars(ctx.attr.plugins + ctx.attr.deps)
     ksp_transitive_runtime_jars = _plugin_mappers.targets_to_ksp_transitive_runtime_jars(ctx.attr.plugins + ctx.attr.deps)
-    plugins = _new_plugins_from(ctx.attr.plugins + _exported_plugins(deps = ctx.attr.deps))
+    plugins = _plugin_common.new_plugins_from(ctx.attr.plugins + _plugin_common.exported_plugins(deps = ctx.attr.deps))
 
     deps_artifacts = _deps_artifacts(toolchains, ctx.attr.deps + ctx.attr.associates)
 
@@ -983,7 +893,7 @@ def _kt_jvm_produce_output_jar_actions(
             module_name = compile_deps.module_name,
             module_jars = compile_deps.associate_jars,
             language_version = toolchains.kt.api_version,
-            exported_compiler_plugins = _collect_plugins_for_export(
+            exported_compiler_plugins = _plugin_common.collect_plugins_for_export(
                 getattr(ctx.attr, "exported_compiler_plugins", []),
                 getattr(ctx.attr, "exports", []),
             ),
@@ -1325,7 +1235,7 @@ def _export_only_providers(ctx, actions, attr, outputs):
             ).module_name,
             module_jars = [],
             language_version = toolchains.kt.api_version,
-            exported_compiler_plugins = _collect_plugins_for_export(
+            exported_compiler_plugins = _plugin_common.collect_plugins_for_export(
                 getattr(attr, "exported_compiler_plugins", []),
                 getattr(attr, "exports", []),
             ),
