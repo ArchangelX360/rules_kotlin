@@ -24,11 +24,16 @@ import java.lang.invoke.MethodHandle
 import java.lang.invoke.MethodHandles
 import java.net.URLClassLoader
 
+/**
+ * The compiler jars and plugins of the builder. Each one resolves from the runfiles on first use,
+ * so a worker needs only the runfiles of the parts it uses: a worker that runs no JVM compiler
+ * plugin ships no plugin jar.
+ */
 class KotlinToolchain private constructor(
-  private val baseJars: List<File>,
-  val kapt3Plugin: CompilerPlugin,
-  val jvmAbiGen: CompilerPlugin,
-  val jdepsGen: CompilerPlugin,
+  baseJars: () -> List<File>,
+  kapt3Plugin: () -> CompilerPlugin,
+  jvmAbiGen: () -> CompilerPlugin,
+  jdepsGen: () -> CompilerPlugin,
   /**
    * The worker-provided jars every Build Tools API compiler runtime shares regardless of the
    * runtime jar set the toolchain supplies: the rules_kotlin compiler wrapper (the
@@ -38,8 +43,12 @@ class KotlinToolchain private constructor(
    * (SharedApiClassesClassLoader) -- the runtime's own jars, including its standard library, stay
    * fully isolated per runtime.
    */
-  private val btapiJars: List<File>,
+  btapiJars: () -> List<File>,
 ) {
+  val kapt3Plugin by lazy(kapt3Plugin)
+  val jvmAbiGen by lazy(jvmAbiGen)
+  val jdepsGen by lazy(jdepsGen)
+
   companion object {
     private val JVM_ABI_PLUGIN by lazy {
       BazelRunFiles
@@ -99,15 +108,15 @@ class KotlinToolchain private constructor(
 
     @JvmStatic
     fun createToolchain(): KotlinToolchain =
-      createToolchain(
-        KOTLINC.verified().absoluteFile,
-        COMPILER_STDLIB.verified().absoluteFile,
-        COMPILER_REFLECT.verified().absoluteFile,
-        BUILD_TOOLS_API.verified().absoluteFile,
-        COMPILER.verified().absoluteFile,
-        JVM_ABI_PLUGIN.verified().absoluteFile,
-        JDEPS_GEN_PLUGIN.verified().absoluteFile,
-        KAPT_PLUGIN.verified().absoluteFile,
+      fromProviders(
+        { KOTLINC.verified().absoluteFile },
+        { COMPILER_STDLIB.verified().absoluteFile },
+        { COMPILER_REFLECT.verified().absoluteFile },
+        { BUILD_TOOLS_API.verified().absoluteFile },
+        { COMPILER.verified().absoluteFile },
+        { JVM_ABI_PLUGIN.verified().absoluteFile },
+        { JDEPS_GEN_PLUGIN.verified().absoluteFile },
+        { KAPT_PLUGIN.verified().absoluteFile },
       )
 
     @JvmStatic
@@ -121,42 +130,69 @@ class KotlinToolchain private constructor(
       jdepsGenFile: File,
       kaptFile: File,
     ): KotlinToolchain =
+      fromProviders(
+        { kotlinc },
+        { compilerStdlib },
+        { compilerReflect },
+        { buildToolsApi },
+        { compiler },
+        { jvmAbiGenFile },
+        { jdepsGenFile },
+        { kaptFile },
+      )
+
+    private fun fromProviders(
+      kotlinc: () -> File,
+      compilerStdlib: () -> File,
+      compilerReflect: () -> File,
+      buildToolsApi: () -> File,
+      compiler: () -> File,
+      jvmAbiGenFile: () -> File,
+      jdepsGenFile: () -> File,
+      kaptFile: () -> File,
+    ): KotlinToolchain =
       KotlinToolchain(
         // The legacy compiler classloader: the rules_kotlin compiler wrapper and the CLI compiler
         // distribution, whose manifest Class-Path resolves the standard library and friends from
         // the distribution's lib directory.
-        listOf(
-          kotlinc,
-          compiler,
-        ),
-        btapiJars =
+        baseJars = {
           listOf(
-            compiler,
-            compilerStdlib,
-            compilerReflect,
-            buildToolsApi,
-          ),
-        jvmAbiGen =
+            kotlinc(),
+            compiler(),
+          )
+        },
+        btapiJars = {
+          listOf(
+            compiler(),
+            compilerStdlib(),
+            compilerReflect(),
+            buildToolsApi(),
+          )
+        },
+        jvmAbiGen = {
           CompilerPlugin(
-            jvmAbiGenFile.path,
+            jvmAbiGenFile().path,
             "org.jetbrains.kotlin.jvm.abi",
-          ),
-        jdepsGen =
+          )
+        },
+        jdepsGen = {
           CompilerPlugin(
-            jdepsGenFile.path,
+            jdepsGenFile().path,
             "io.bazel.kotlin.plugin.jdeps.JDepsGen",
-          ),
-        kapt3Plugin =
+          )
+        },
+        kapt3Plugin = {
           CompilerPlugin(
-            kaptFile.path,
+            kaptFile().path,
             "org.jetbrains.kotlin.kapt3",
-          ),
+          )
+        },
       )
   }
 
   val classLoader by lazy {
     URLClassLoader(
-      baseJars.map { it.toURI().toURL() }.toTypedArray(),
+      baseJars().map { it.toURI().toURL() }.toTypedArray(),
       ClassLoader.getPlatformClassLoader(),
     )
   }
@@ -167,7 +203,7 @@ class KotlinToolchain private constructor(
    */
   val btapiClassLoader by lazy {
     URLClassLoader(
-      btapiJars.map { it.toURI().toURL() }.toTypedArray(),
+      btapiJars().map { it.toURI().toURL() }.toTypedArray(),
       ClassLoader.getPlatformClassLoader(),
     )
   }
