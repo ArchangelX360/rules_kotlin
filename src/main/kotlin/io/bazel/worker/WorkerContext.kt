@@ -26,6 +26,7 @@ import java.io.Closeable
 import java.io.InterruptedIOException
 import java.io.PrintStream
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.logging.Level
 import java.util.logging.Logger
 import java.util.logging.SimpleFormatter
@@ -38,6 +39,15 @@ class WorkerContext private constructor(
 ) : Closeable,
   ScopeLogging by ContextLogger(name, verbose.level, null) {
   companion object {
+    /**
+     * The real path of the worker working directory. A JVM cannot change its working directory,
+     * so the expensive [Path.toRealPath] runs once per process. Bazel gives sandbox directories
+     * relative to it, in their case on disk, so a root resolved against it is real too. Tasks need
+     * the real case: the Kotlin compiler compares klib paths case-sensitively, also on a
+     * case-insensitive file system.
+     */
+    private val realWorkingDirectory: Path by lazy { Paths.get("").toRealPath() }
+
     fun <T : Any?> run(
       named: String = "worker",
       verbose: Granularity = INFO,
@@ -108,6 +118,11 @@ class WorkerContext private constructor(
      * path. Empty outside the persistent worker protocol.
      */
     val inputDigests: Map<String, String> = emptyMap(),
+    /**
+     * The absolute real root of the request paths: the sandbox directory of a sandboxed request,
+     * otherwise the working directory.
+     */
+    val execRoot: Path = directory,
   ) : ScopeLogging by logging {
     /** resultOf a status supplier that includes information collected in the Context. */
     fun resultOf(executeTaskIn: (TaskContext) -> Status): TaskResult {
@@ -143,11 +158,21 @@ class WorkerContext private constructor(
   ): TaskResult {
     info { "start task $name" }
     return if (sandboxDir != null) {
-      TaskContext(sandboxDir, logging = narrowTo(name), inputDigests = inputDigests).resultOf(task)
+      TaskContext(
+        sandboxDir,
+        logging = narrowTo(name),
+        inputDigests = inputDigests,
+        execRoot = realWorkingDirectory.resolve(sandboxDir).normalize(),
+      ).resultOf(task)
     } else {
       WorkingDirectoryContext
         .use {
-          TaskContext(dir, logging = narrowTo(name), inputDigests = inputDigests).resultOf(task)
+          TaskContext(
+            dir,
+            logging = narrowTo(name),
+            inputDigests = inputDigests,
+            execRoot = realWorkingDirectory,
+          ).resultOf(task)
         }
     }.also {
       info { "end task $name: ${it.status}" }
