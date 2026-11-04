@@ -1,6 +1,6 @@
 """Implementation of the rules_kotlin module extension."""
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file", "http_jar")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file", "http_jar")
 load(
     ":btapi_impl.bzl",
     "BTAPI_IMPL_DEFAULT_REPOSITORY",
@@ -14,6 +14,21 @@ load(":versions.bzl", "version", "versions")
 # Keep these names in sync with //kotlin/internal:defs.bzl.
 _KT_COMPILER_REPO = "com_github_jetbrains_kotlin"
 _KSP_COMPILER_PLUGIN_REPO = "com_github_google_ksp"
+
+# The build file of a binaryen release archive: its wasm-opt, and the files wasm-opt runs with.
+_BINARYEN_BUILD_FILE = """\
+filegroup(
+    name = "wasm-opt",
+    srcs = [{executable}],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "files",
+    srcs = {files},
+    visibility = ["//visibility:public"],
+)
+"""
 
 def kotlin_repositories(
         compiler_repository_name = _KT_COMPILER_REPO,
@@ -87,6 +102,18 @@ def kotlin_repositories(
         version = versions.KOTLINX_COROUTINES_CORE_JVM,
         downloaded_file_path = "kotlinx-coroutines-core-jvm.jar",
     )
+
+    for platform, (sha256, executable, libraries) in versions.BINARYEN.archives.items():
+        http_archive(
+            name = "binaryen_%s" % platform,
+            build_file_content = _BINARYEN_BUILD_FILE.format(
+                executable = repr(executable),
+                files = repr([executable] + libraries),
+            ),
+            sha256 = sha256,
+            strip_prefix = versions.BINARYEN.strip_prefix_template.format(version = versions.BINARYEN.version),
+            urls = [versions.BINARYEN.url_template.format(version = versions.BINARYEN.version, platform = platform)],
+        )
 
     versions.use_repository(
         http_file,

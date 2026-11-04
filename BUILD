@@ -99,6 +99,7 @@ multirun(
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:build_lib_ktlint_fix",
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:ksp2_lib_ktlint_fix",
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:merge_jdeps_lib_ktlint_fix",
+        "//src/main/kotlin/io/bazel/kotlin/builder/cmd:wasm_opt_lib_ktlint_fix",
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:wasmjs_build_lib_ktlint_fix",
         "//src/main/kotlin/io/bazel/kotlin/builder/tasks:tasks_ktlint_fix",
         "//src/main/kotlin/io/bazel/kotlin/builder/tasks/wasmjs:wasmjs_ktlint_fix",

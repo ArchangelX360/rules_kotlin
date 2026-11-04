@@ -23,7 +23,9 @@ load(
 load("//kotlin/internal:opts.bzl", "KotlincOptions")
 load(":compile.bzl", "wasmjs_compile_actions", "wasmjs_link_action")
 load(":npm.bzl", "merged_npm_packages", "npm_package_entries")
+load(":opt.bzl", "wasm_opt_action")
 load(":providers.bzl", "KtWasmJsBinaryInfo", "KtWasmJsInfo")
+load(":toolchains.bzl", "WASM_OPT_TOOLCHAIN_TYPE")
 
 _KOTLINC_OPTS_ATTR = attr.label(
     doc = """Kotlin compiler options for this target. Without it, the target uses the
@@ -171,18 +173,30 @@ def _kt_wasmjs_binary_impl(ctx):
     ir_output_name = ctx.attr.ir_output_name or ctx.attr.module_name or ctx.label.name
     linked_dir = wasmjs_link_action(ctx, ir_output_name, module_info.klib, module_info.link_klibs)
 
+    # With optimize = "auto", wasm-opt follows the build configuration: `--compilation_mode=opt`
+    # ships the binaryen-optimized directory and its symbol maps. Every other mode ships the plain
+    # linked output and never pays for wasm-opt.
+    optimize = ctx.attr.optimize == "on" or (ctx.attr.optimize == "auto" and ctx.var["COMPILATION_MODE"] == "opt")
+    if optimize:
+        opt = wasm_opt_action(ctx, linked_dir, "%s-js" % ir_output_name)
+        dist_dir = opt.optimized_directory
+        functions_map_dir = opt.functions_map_directory
+    else:
+        dist_dir = linked_dir
+        functions_map_dir = None
+
     return [
-        DefaultInfo(files = depset([linked_dir])),
+        DefaultInfo(files = depset([dist_dir] + ([functions_map_dir] if functions_map_dir else []))),
         KtWasmJsBinaryInfo(
-            dist_directory = linked_dir,
-            functions_map_directory = None,
+            dist_directory = dist_dir,
+            functions_map_directory = functions_map_dir,
             npm_packages = merged_npm_packages(module_info.npm_packages.to_list(), ctx.label),
         ),
     ]
 
 kt_wasmjs_binary = rule(
     doc = """Links a `kt_wasmjs_library` and its transitive klibs into a Kotlin/WasmJs application
-      directory.""",
+      directory. binaryen's wasm-opt can optimize the result, see the `optimize` attribute.""",
     attrs = {
         "ir_output_name": attr.string(
             doc = """The `-ir-output-name` of the compiler: the per-module JS and Wasm file names of
@@ -197,6 +211,13 @@ kt_wasmjs_binary = rule(
         ),
         "module_name": attr.string(
             doc = "The name of the linked module. It names the output files.",
+        ),
+        "optimize": attr.string(
+            doc = """Whether the output is the wasm-opt-optimized directory ("on") or the plain
+              linked one ("off"). "auto" follows the build configuration: optimized in
+              `--compilation_mode=opt` builds only.""",
+            default = "auto",
+            values = ["auto", "on", "off"],
         ),
         "source_map_base_dirs": attr.string_list(
             doc = """The `-source-map-base-dirs` of the compiler: the roots that the `sources`
@@ -216,7 +237,10 @@ kt_wasmjs_binary = rule(
             default = True,
         ),
     },
-    toolchains = [_TOOLCHAIN_TYPE],
+    toolchains = [
+        _TOOLCHAIN_TYPE,
+        config_common.toolchain_type(WASM_OPT_TOOLCHAIN_TYPE, mandatory = False),
+    ],
     implementation = _kt_wasmjs_binary_impl,
     provides = [KtWasmJsBinaryInfo],
 )

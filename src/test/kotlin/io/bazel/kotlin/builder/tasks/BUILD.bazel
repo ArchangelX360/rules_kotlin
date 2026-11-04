@@ -235,6 +235,22 @@ kt_rules_test(
     ],
 )
 
+kt_rules_test(
+    name = "OptimizeWasmTest",
+    srcs = ["wasmjs/OptimizeWasmTest.kt"],
+    # The test runs a shell script in place of wasm-opt.
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//src/main/kotlin/io/bazel/kotlin/builder/tasks/wasmjs",
+        "//src/main/kotlin/io/bazel/worker",
+        "@kotlin_rules_maven_test//:com_google_truth_truth",
+        "@kotlin_rules_maven_test//:junit_junit",
+    ],
+)
+
 test_suite(
     name = "tasks_tests",
     tests = [

@@ -674,12 +674,12 @@ The Kotlin/WasmJs rules need a Kotlin 2.4.20 or later compiler in the toolchain.
 <pre>
 load("@rules_kotlin//kotlin:wasmjs.bzl", "kt_wasmjs_binary")
 
-kt_wasmjs_binary(<a href="#kt_wasmjs_binary-name">name</a>, <a href="#kt_wasmjs_binary-ir_output_name">ir_output_name</a>, <a href="#kt_wasmjs_binary-kotlinc_opts">kotlinc_opts</a>, <a href="#kt_wasmjs_binary-module">module</a>, <a href="#kt_wasmjs_binary-module_name">module_name</a>, <a href="#kt_wasmjs_binary-source_map_base_dirs">source_map_base_dirs</a>,
-                 <a href="#kt_wasmjs_binary-source_map_prefix">source_map_prefix</a>, <a href="#kt_wasmjs_binary-source_maps">source_maps</a>)
+kt_wasmjs_binary(<a href="#kt_wasmjs_binary-name">name</a>, <a href="#kt_wasmjs_binary-ir_output_name">ir_output_name</a>, <a href="#kt_wasmjs_binary-kotlinc_opts">kotlinc_opts</a>, <a href="#kt_wasmjs_binary-module">module</a>, <a href="#kt_wasmjs_binary-module_name">module_name</a>, <a href="#kt_wasmjs_binary-optimize">optimize</a>,
+                 <a href="#kt_wasmjs_binary-source_map_base_dirs">source_map_base_dirs</a>, <a href="#kt_wasmjs_binary-source_map_prefix">source_map_prefix</a>, <a href="#kt_wasmjs_binary-source_maps">source_maps</a>)
 </pre>
 
 Links a `kt_wasmjs_library` and its transitive klibs into a Kotlin/WasmJs application
-directory.
+directory. binaryen's wasm-opt can optimize the result, see the `optimize` attribute.
 
 **ATTRIBUTES**
 
@@ -691,6 +691,7 @@ directory.
 | <a id="kt_wasmjs_binary-kotlinc_opts"></a>kotlinc_opts |  Kotlin compiler options for this target. Without it, the target uses the `kotlinc_options` of the toolchain. The options that only the Kotlin/JVM compiler accepts are left out.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="kt_wasmjs_binary-module"></a>module |  The library whose klib is the entry point of the link (`-Xinclude`). Its transitive `link_klibs` are the `-libraries` of the link.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="kt_wasmjs_binary-module_name"></a>module_name |  The name of the linked module. It names the output files.   | String | optional |  `""`  |
+| <a id="kt_wasmjs_binary-optimize"></a>optimize |  Whether the output is the wasm-opt-optimized directory ("on") or the plain linked one ("off"). "auto" follows the build configuration: optimized in `--compilation_mode=opt` builds only.   | String | optional |  `"auto"`  |
 | <a id="kt_wasmjs_binary-source_map_base_dirs"></a>source_map_base_dirs |  The `-source-map-base-dirs` of the compiler: the roots that the `sources` entries of the source maps are relative to. The first match wins, and a source under no root becomes its bare file name. The roots are relative to the exec root. The default `.` is the exec root, the only root that matches every source path. The link passes the roots only with `source_map_prefix`.   | List of strings | optional |  `["."]`  |
 | <a id="kt_wasmjs_binary-source_map_prefix"></a>source_map_prefix |  The `-source-map-prefix` of the compiler, prepended to every `sources` entry of the source maps. It also makes those paths relative to `source_map_base_dirs`, and not to the link output directory. That keeps `..` out of them.   | String | optional |  `""`  |
 | <a id="kt_wasmjs_binary-source_maps"></a>source_maps |  Whether the link emits source maps (`-source-map`).   | Boolean | optional |  `True`  |

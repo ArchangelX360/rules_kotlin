@@ -126,3 +126,19 @@ java_binary(
     visibility = ["//visibility:public"],
     runtime_deps = [":wasmjs_worker"] + KOTLIN_STDLIBS,
 )
+
+java_import(
+    name = "wasm_opt_worker",
+    jars = ["wasm_opt_worker.jar"],
+)
+
+java_binary(
+    name = "wasm_opt",
+    data = KOTLIN_STDLIBS,
+    jvm_flags = [
+        "-XX:-MaxFDLimit",
+    ],
+    main_class = "io.bazel.kotlin.builder.cmd.WasmOptMain",
+    visibility = ["//visibility:public"],
+    runtime_deps = [":wasm_opt_worker"] + KOTLIN_STDLIBS,
+)

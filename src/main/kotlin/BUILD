@@ -41,6 +41,12 @@ alias(
 )
 
 alias(
+    name = "wasm_opt",
+    actual = "//src/main/kotlin/io/bazel/kotlin/builder/cmd:wasm_opt",
+    visibility = ["//visibility:public"],
+)
+
+alias(
     name = "wasmjs_build",
     actual = "//src/main/kotlin/io/bazel/kotlin/builder/cmd:wasmjs_build",
     visibility = ["//visibility:public"],
@@ -63,6 +69,7 @@ release_archive(
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:build_deploy.jar": "kotlin_worker.jar",
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:ksp2_deploy.jar": "ksp2_worker.jar",
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:merge_jdeps_deploy.jar": "jdeps_merger_worker.jar",
+        "//src/main/kotlin/io/bazel/kotlin/builder/cmd:wasm_opt_deploy.jar": "wasm_opt_worker.jar",
         "//src/main/kotlin/io/bazel/kotlin/builder/cmd:wasmjs_build_deploy.jar": "wasmjs_worker.jar",
         "//src/main/kotlin/io/bazel/kotlin/ksp2:ksp2.jar": "ksp2_invoker.jar",
         "BUILD.release.bazel": "BUILD.bazel",

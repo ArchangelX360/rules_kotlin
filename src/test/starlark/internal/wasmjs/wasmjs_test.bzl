@@ -112,6 +112,40 @@ def _plugin_test_impl(ctx):
 
 _plugin_test = analysistest.make(_plugin_test_impl)
 
+def _optimize_on_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    argv = _action(env, "WasmOptWasmJs").argv
+    target = analysistest.target_under_test(env)
+    info = target[KtWasmJsBinaryInfo]
+    asserts.equals(env, expected = "%s-js-optimized" % target.label.name, actual = info.dist_directory.basename)
+    asserts.equals(env, expected = "%s-js-functions-map" % target.label.name, actual = info.functions_map_directory.basename)
+    asserts.true(env, "--wasm_opt_arg=--enable-gc" in argv, msg = "expected the binaryen arguments, got %s" % argv)
+    return analysistest.end(env)
+
+_optimize_on_test = analysistest.make(_optimize_on_test_impl)
+
+def _optimize_auto_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    asserts.equals(
+        env,
+        expected = [],
+        actual = [a for a in analysistest.target_actions(env) if a.mnemonic == "WasmOptWasmJs"],
+    )
+    info = analysistest.target_under_test(env)[KtWasmJsBinaryInfo]
+    asserts.equals(env, expected = None, actual = info.functions_map_directory)
+    return analysistest.end(env)
+
+# "auto" optimizes only in `--compilation_mode=opt`.
+_optimize_auto_test = analysistest.make(
+    _optimize_auto_test_impl,
+    config_settings = {"//command_line_option:compilation_mode": "fastbuild"},
+)
+
+_optimize_auto_in_opt_test = analysistest.make(
+    _optimize_on_test_impl,
+    config_settings = {"//command_line_option:compilation_mode": "opt"},
+)
+
 def _import_test_impl(ctx):
     env = analysistest.begin(ctx)
     info = analysistest.target_under_test(env)[KtWasmJsInfo]
@@ -284,6 +318,12 @@ def _contents():
         module = ":library",
         tags = ["manual"],
     )
+    kt_wasmjs_binary(
+        name = "optimized",
+        module = ":library",
+        optimize = "on",
+        tags = ["manual"],
+    )
     kt_wasmjs_library(
         name = "conflicting_npm",
         srcs = [":library_source"],
@@ -302,6 +342,9 @@ def _contents():
     _link_action_test(name = "link_action_test", target_under_test = ":linked")
     _import_test(name = "import_test", target_under_test = ":imported")
     _plugin_test(name = "plugin_test", target_under_test = ":with_plugin")
+    _optimize_on_test(name = "optimize_on_test", target_under_test = ":optimized")
+    _optimize_auto_test(name = "optimize_auto_test", target_under_test = ":linked")
+    _optimize_auto_in_opt_test(name = "optimize_auto_in_opt_test", target_under_test = ":linked")
     _neverlink_test(name = "neverlink_import_test", target_under_test = ":neverlink_import")
     _neverlink_dependency_test(name = "neverlink_dependency_test", target_under_test = ":with_neverlink_dep_binary")
     _neverlink_library_test(name = "neverlink_library_test", target_under_test = ":neverlink_library")
@@ -322,6 +365,9 @@ def wasmjs_test_suite(name):
             ":neverlink_dependency_test",
             ":neverlink_import_test",
             ":neverlink_library_test",
+            ":optimize_auto_in_opt_test",
+            ":optimize_auto_test",
+            ":optimize_on_test",
             ":plugin_test",
         ],
     )
